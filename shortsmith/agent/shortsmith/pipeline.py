@@ -338,6 +338,17 @@ def run(
         hasil = renderer.build(edl, work, output)
         lapor(90, "render selesai")
 
+    # Periksa HASILNYA, bukan rencananya.
+    #
+    # Seluruh perapian batas bekerja pada timestamp yang menunjuk ke rekaman
+    # sumber. Yang didengar orang adalah berkas ini, dan di antara keduanya
+    # masih ada renderer, fade, dan pembulatan ke grid frame. Tiap kali ada
+    # laporan "ada suara bocor di detik sekian", pemeriksaannya selalu berakhir
+    # di sini — jadi lebih baik dijalankan sendiri, setiap kali.
+    from .periksa_hasil import laporkan
+
+    laporkan(hasil, edl)
+
     ringkasan = {
         "job_id": job_id,
         "sources": [str(x) for x in paths],

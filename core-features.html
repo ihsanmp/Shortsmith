@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Core Features</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #ffffff;
+  padding: 80px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.c1-container {
+  max-width: 1100px;
+  width: 100%;
+  text-align: center;
+}
+
+/* ---------- Header ---------- */
+
+.c1-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  background: linear-gradient(90deg, #F5C344, #F28482, #B567C2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.c1-title {
+  font-size: 2.75rem;
+  font-weight: 500;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+}
+
+.c1-subtitle {
+  font-size: 1.125rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin-bottom: 50px;
+}
+
+/* ---------- Grid ---------- */
+
+.c1-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .c1-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .c1-grid { grid-template-columns: 1fr; }
+  .c1-title { font-size: 2.25rem; }
+}
+
+/* ---------- Card base ---------- */
+
+.c1-card {
+  border-radius: 20px;
+  height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+  background: #F4F8F9;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+}
+
+.c1-card h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1e293b;
+  padding: 24px;
+  z-index: 2;
+}
+
+/* ---------- Card 1 — Smart Prompt Suggestions ---------- */
+
+.c1-card-1 {
+  background: radial-gradient(circle at 50% 0%, #FFB347 0%, #F9ED96 30%, #F4F8F9 60%, #F4F8F9 100%);
+}
+
+.c1-prompt-box {
+  position: absolute;
+  top: 30px;
+  left: 24px;
+  right: 24px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.6;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+}
+
+.c1-blur-text {
+  font-weight: 600;
+  background: linear-gradient(90deg, #FFB347, #E5A1F5);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.c1-pill {
+  position: absolute;
+  top: 180px;
+  left: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #000000;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1e293b;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.c1-pill .c1-spark {
+  color: #a855f7;
+  font-size: 1rem;
+}
+
+.c1-cursor {
+  position: absolute;
+  top: 205px;
+  left: 110px;
+  width: 24px;
+  height: 24px;
+  z-index: 10;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2));
+}
+
+/* ---------- Card 2 — API Access ---------- */
+
+.c1-card-2 {
+  background: radial-gradient(circle at 50% 0%, #E5A1F5 0%, #F8ACA0 30%, #F4F8F9 60%, #F4F8F9 100%);
+}
+
+.c1-api-visual {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 70px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.c1-network-img {
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  margin-top: 20px;
+}
+
+/* ---------- Card 3 — Project Library ---------- */
+
+.c1-card-3 {
+  background: radial-gradient(circle at 50% 0%, #F9ED96 0%, #E5A1F5 30%, #F4F8F9 60%, #F4F8F9 100%);
+}
+
+.c1-mesh {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.8) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.8) 1px, transparent 1px);
+  background-size: 16px 16px;
+  -webkit-mask-image: radial-gradient(circle at center top, black 0%, transparent 80%);
+  mask-image: radial-gradient(circle at center top, black 0%, transparent 80%);
+}
+
+.c1-folder {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 170px;
+  filter: drop-shadow(0 15px 25px rgba(0, 0, 0, 0.08));
+}
+
+.c1-search {
+  position: absolute;
+  top: 220px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #000000;
+  padding: 6px 18px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #1e293b;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<div class="c1-container">
+
+  <div class="c1-badge">Core Features</div>
+  <h2 class="c1-title">Built for Speed &amp; Quality</h2>
+  <p class="c1-subtitle">Everything you need to go<br>from idea to image</p>
+
+  <div class="c1-grid">
+
+    <!-- Card 1 -->
+    <div class="c1-card c1-card-1">
+      <div class="c1-prompt-box">
+        A bright, high-resolution 3D illustration of a
+        <span class="c1-blur-text">cheerful cartoon</span> of a
+        <span class="c1-blur-text">girl character</span>
+        <span class="c1-blur-text">centred against a</span>
+        smooth blue background
+      </div>
+
+      <div class="c1-pill"><span class="c1-spark">✦</span>Add more details</div>
+
+      <svg class="c1-cursor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 2L20 11L11 13L9 22L4 2Z" fill="#0f172a" stroke="#ffffff" stroke-width="1"/>
+      </svg>
+
+      <h3>Smart Prompt Suggestions</h3>
+    </div>
+
+    <!-- Card 2 -->
+    <div class="c1-card c1-card-2">
+      <div class="c1-api-visual">
+        <!-- replacement for network.svg (original R2 host has an expired TLS cert) -->
+        <svg class="c1-network-img" viewBox="0 0 260 180" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <g stroke="#94a3b8" stroke-width="1.5" opacity="0.55">
+            <path d="M130 62V118"/>
+            <path d="M130 62L62 40"/>
+            <path d="M130 62L198 40"/>
+            <path d="M130 118L62 140"/>
+            <path d="M130 118L198 140"/>
+            <path d="M62 40V140"/>
+            <path d="M198 40V140"/>
+          </g>
+          <g>
+            <rect x="104" y="66" width="52" height="48" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+            <path d="M118 82h24M118 90h24M118 98h14" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+          </g>
+          <g fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5">
+            <circle cx="62" cy="40" r="14"/>
+            <circle cx="198" cy="40" r="14"/>
+            <circle cx="62" cy="140" r="14"/>
+            <circle cx="198" cy="140" r="14"/>
+          </g>
+          <g fill="#a855f7">
+            <circle cx="62" cy="40" r="4.5"/>
+            <circle cx="198" cy="40" r="4.5"/>
+            <circle cx="62" cy="140" r="4.5"/>
+            <circle cx="198" cy="140" r="4.5"/>
+          </g>
+        </svg>
+      </div>
+      <h3>API Access</h3>
+    </div>
+
+    <!-- Card 3 -->
+    <div class="c1-card c1-card-3">
+      <div class="c1-mesh"></div>
+
+      <!-- replacement for library icon.svg (original R2 host has an expired TLS cert) -->
+      <svg class="c1-folder" viewBox="0 0 170 130" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="32" y="20" width="106" height="76" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+        <rect x="22" y="32" width="126" height="76" rx="10" fill="#fdfdff" stroke="#e2e8f0" stroke-width="2"/>
+        <path d="M12 56a10 10 0 0 1 10-10h40l12 14h64a10 10 0 0 1 10 10v42a10 10 0 0 1-10 10H22a10 10 0 0 1-10-10V56Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+        <path d="M12 66h146" stroke="#e2e8f0" stroke-width="2"/>
+        <g fill="#e9d5ff">
+          <rect x="30" y="80" width="30" height="22" rx="5"/>
+          <rect x="70" y="80" width="30" height="22" rx="5"/>
+          <rect x="110" y="80" width="30" height="22" rx="5"/>
+        </g>
+      </svg>
+
+      <div class="c1-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        Search in library
+      </div>
+
+      <h3>Project Library</h3>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

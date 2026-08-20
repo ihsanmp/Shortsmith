@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "shortsmith-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "shortsmith/web",
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    }
+  ]
+}

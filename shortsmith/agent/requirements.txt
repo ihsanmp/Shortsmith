@@ -1,0 +1,16 @@
+# --- inti ---
+pydantic>=2.7
+anthropic>=0.69
+numpy>=1.26
+requests>=2.32
+
+# --- transkrip: jalur Intel (Arc iGPU / AI Boost NPU) ---
+openvino>=2025.0
+openvino-genai>=2025.0
+optimum[openvino]>=1.24
+
+# --- transkrip: jalur CPU, satu-satunya yang memberi timestamp per kata sungguhan ---
+faster-whisper>=1.0
+
+# --- ekstraksi concept profile (hanya dipakai saat membuat konsep baru) ---
+scenedetect[opencv]>=0.6.4

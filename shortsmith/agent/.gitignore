@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.shortsmith/
+models/
+_test/
+*.mp4
+*.mov

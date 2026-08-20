@@ -1,0 +1,8 @@
+# Test hanya dijalankan lokal; tidak perlu ikut terunggah ke Vercel.
+test/
+
+# Hasil generate drizzle-kit — migrasi dijalankan terpisah lewat db:push.
+drizzle/
+
+# Agent Python tidak ada hubungannya dengan build web.
+../agent/

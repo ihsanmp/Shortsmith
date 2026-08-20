@@ -1,0 +1,64 @@
+# ==========================================================================
+# Repo ini PUBLIK. Daftar di bawah ditulis untuk gagal ke arah TERTUTUP:
+# apa pun yang meragukan dikecualikan, dan yang perlu masuk ditambahkan
+# kembali secara eksplisit dengan tanda "!".
+# ==========================================================================
+
+# --- Rahasia ---------------------------------------------------------------
+# Seluruh berkas .env, TERMASUK yang bernama contoh/example.
+#
+# Bukan karena template pasti berbahaya, melainkan karena isinya tidak bisa
+# diperiksa dari sini — berkas .env di project ini terkunci dari pembacaan.
+# Menaruh berkas yang belum diperiksa ke repo publik adalah kesalahan yang
+# tidak bisa ditarik kembali: GitHub menyimpan salinannya meski nanti dihapus.
+# Kalau isinya memang hanya placeholder, tambahkan sendiri setelah dilihat.
+.env
+.env.*
+*.env
+
+# --- Bahan dan hasil milik pengguna ----------------------------------------
+# Rekaman mentah dan video jadi. Ratusan MB, dan isinya pribadi.
+shortsmith/agent/bahan/
+shortsmith/agent/hasil/
+shortsmith/agent/_test/
+
+# Model Whisper dan sejenisnya — ratusan MB, dan bisa diunduh ulang kapan saja.
+shortsmith/agent/models/
+
+# Sidik wajah tokoh yang dikenali agent.
+#
+# Isinya vektor ciri wajah orang sungguhan. Di repo publik itu data pribadi
+# yang tidak seharusnya ada, dan ia dibangun ulang sendiri dari bahan saat
+# agent berjalan — jadi tidak ada yang hilang dengan mengeluarkannya.
+shortsmith/agent/tokoh.json
+
+# --- Keluaran build dan dependensi -----------------------------------------
+node_modules/
+.next/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+drizzle/
+
+__pycache__/
+*.pyc
+.venv/
+.shortsmith/
+
+# --- Log dan berkas kerja --------------------------------------------------
+*.log
+*.err
+.DS_Store
+Thumbs.db
+
+# --- Media -----------------------------------------------------------------
+# Video di mana pun dikecualikan...
+*.mp4
+*.mov
+*.mkv
+*.wav
+
+# ...kecuali dua berkas latar dashboard, yang memang bagian dari aplikasinya
+# dan totalnya di bawah 1,5 MB.
+!shortsmith/web/public/hero-dashboard.mp4
+!shortsmith/web/public/hero-dashboard-potret.mp4

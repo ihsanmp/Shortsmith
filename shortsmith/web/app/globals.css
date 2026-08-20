@@ -1,0 +1,3487 @@
+/* ==========================================================================
+   Tailwind — dipasang BERDAMPINGAN, bukan menggantikan
+   ==========================================================================
+
+   Yang diimpor hanya `theme` dan `utilities`. Lapisan `preflight` SENGAJA
+   dilewati: ia mereset ulang seluruh elemen HTML, dan 1431 baris CSS di bawah
+   ini sudah punya resetnya sendiri. Memasang keduanya membuat aturan saling
+   menimpa di banyak tempat sekaligus — kerusakan kecil yang tersebar dan sulit
+   dilacak satu per satu.
+
+   Konsekuensinya jelas dan disengaja: komponen lama tetap bekerja dengan
+   CSS-nya, komponen baru bisa memakai utility Tailwind, dan keduanya menunjuk
+   token warna yang SAMA lewat blok @theme di bawah.
+   ========================================================================== */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Varian `dark:` diarahkan ke atribut yang sudah dipakai slider tema.
+   Tanpa ini, `dark:` mengikuti setelan sistem — dan komponen yang ditempel
+   dari luar akan menampilkan tema yang berbeda dari yang dipilih pengguna. */
+
+/* Token aplikasi dipetakan ke Tailwind.
+   `inline` dipakai supaya nilainya tetap berupa var() — bukan disalin. Kalau
+   disalin, utility Tailwind akan membeku pada warna tema gelap dan tidak ikut
+   berubah saat slider ditekan. Dengan var(), keduanya membaca sumber yang sama
+   dan light mode bekerja tanpa satu pun kelas `dark:`. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+
+  --color-accent: var(--accent);
+  --color-focus: var(--focus);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-info: var(--info);
+
+  --radius-sm: var(--r-sm);
+  --radius-DEFAULT: var(--r);
+  --radius-lg: var(--r-lg);
+}
+
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ==========================================================================
+   Token
+   Gelap sebagai mode utama — bukan selera, tapi karena ini alat video.
+   Thumbnail dan preview video dinilai jauh lebih akurat di atas kanvas gelap,
+   dan setiap editor video profesional memakai pendekatan yang sama.
+   Latar sengaja BUKAN hitam murni: #000 membuat teks tampak menyebar di layar
+   OLED dan menghilangkan kedalaman antar lapisan.
+   ========================================================================== */
+
+:root {
+  --bg: #0b0d18;
+  --surface: #141728;
+  --surface-2: #191d33;
+  --surface-3: #212642;
+
+  --ink: #f1f5f9;
+  --ink-2: #cbd5e1;
+  --ink-3: #94a3b8;
+  --ink-4: #64748b;
+
+  --line: #262b45;
+  --line-2: #343a5c;
+
+  /* Navigasi pil. Di tema gelap, pilnya TERANG — ia harus menonjol dari wadah
+     yang sudah gelap, dan warna aksen di sini akan bersaing dengan gradien
+     identitas yang tepat di sebelahnya. */
+  --navpil-bg: rgba(255, 255, 255, 0.04);
+  --navpil-garis: rgba(255, 255, 255, 0.08);
+  --navpil-pil: #f1f5f9;
+  --navpil-teks-aktif: #0b0d18;
+
+  /* Panel menu sengaja LEBIH GELAP dari --surface. Ia melayang di atas halaman,
+     dan permukaan melayang yang warnanya sama dengan yang di bawahnya terbaca
+     menempel — bayangan sendirian tidak cukup memisahkannya. */
+  --profil-panel-bg: #0f1220;
+  --profil-panel-garis: rgba(255, 255, 255, 0.09);
+  --profil-item-hover: rgba(255, 255, 255, 0.06);
+  --profil-kartu-bg: #16192b;
+  --profil-kartu-garis: rgba(255, 255, 255, 0.07);
+  --profil-kartu-label: rgba(241, 245, 249, 0.62);
+  --profil-kartu-nilai: #f1f5f9;
+
+  /* Identitas warna diambil DARI video latar dashboard, bukan dipilih terpisah.
+     Rona dominannya diukur dari video itu sendiri: 210-260 derajat, yaitu biru
+     sampai ungu. Nilai di bawah adalah rona yang sama, dinaikkan terangnya
+     supaya terbaca sebagai warna antarmuka — di video mereka gelap karena
+     duduk di atas latar hitam.
+
+     Gradien kuning-merah muda yang lama dibuang seluruhnya. Ia dan video itu
+     berasal dari dua dunia yang berbeda, dan menaruh keduanya di satu halaman
+     membuat mereknya terlihat belum diputuskan. */
+  --grad: linear-gradient(90deg, #64cefb, #7c8cf0, #a78bfa);
+  --accent: #64cefb;
+  --accent-soft: rgba(100, 206, 251, 0.14);
+  --focus: #a78bfa;
+
+  --ok: #34d399;
+  --ok-bg: rgba(52, 211, 153, 0.12);
+  --warn: #fbbf24;
+  --warn-bg: rgba(251, 191, 36, 0.12);
+  --info: #60a5fa;
+  --info-bg: rgba(96, 165, 250, 0.12);
+  --err: #f87171;
+  --err-bg: rgba(248, 113, 113, 0.12);
+
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+  --r-full: 999px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.8);
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --t: 180ms var(--ease);
+
+  /* Latar adalah GRADASI VERTIKAL, bukan warna rata.
+     Warna terkumpul di atas lalu meluruh ke bawah, sehingga bagian bawah layar
+     — tempat isi terbanyak berada — tetap tenang dan tidak bersaing dengan
+     teks. Tiga token ini yang menentukannya, dan light mode cukup menimpanya. */
+  --bg-atas: #1c1f3d;
+  --bg-bawah: #080809;
+  --bg-cahaya: rgba(70, 78, 140, 0.45);
+
+  /* Grid latar. Garisnya nyaris tak terlihat, titik di perpotongannya sedikit
+     lebih terang — itu yang membuat polanya terbaca sebagai kisi, bukan sebagai
+     kotak-kotak. Garis sendirian tanpa titik terlihat seperti tabel. */
+  --grid-jarak: 62px;
+  --grid-garis: rgba(148, 163, 184, 0.055);
+  --grid-titik: rgba(148, 163, 184, 0.28);
+}
+
+/* ==========================================================================
+   Light mode
+   Ditulis sebagai definisi ULANG token, bukan sebagai aturan tandingan.
+   Seluruh aplikasi memakai var(--bg), var(--ink), dan seterusnya, jadi satu
+   blok ini mengubah semuanya sekaligus — tidak ada komponen yang perlu tahu
+   tema mana yang sedang aktif.
+
+   Latar sengaja BUKAN putih murni. #fff memantulkan terlalu keras di layar
+   terang dan membuat teks gelap tampak bergetar; abu sangat muda memberi
+   kontras yang sama nyamannya tanpa efek itu.
+   ========================================================================== */
+html {
+  color-scheme: dark;
+}
+
+body {
+  /* Cahaya lembut di puncak DI ATAS gradasi vertikal.
+     Gradasi sendirian terlihat seperti sapuan rata; cahaya elips di atasnya
+     memberi kesan sumber cahaya, dan itu yang membuat latarnya bernapas.
+     background-attachment: fixed menjaga gradasinya tetap terhadap layar, jadi
+     halaman panjang tidak mengulang pola yang sama berkali-kali. */
+  /* Empat lapisan, urutannya menentukan:
+       1. titik di perpotongan  (paling atas)
+       2-3. garis kisi
+       4. cahaya puncak
+       5. gradasi vertikal      (paling bawah)
+     Titik digambar terakhir supaya ia duduk DI ATAS perpotongan garis; kalau
+     di bawah, garis membelahnya dan titiknya terlihat seperti noda. */
+  background:
+    radial-gradient(circle at 0 0, var(--grid-titik) 1.4px, transparent 1.5px),
+    linear-gradient(to right, var(--grid-garis) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-garis) 1px, transparent 1px),
+    radial-gradient(120% 62% at 50% -8%, var(--bg-cahaya), transparent 68%),
+    linear-gradient(180deg, var(--bg-atas) 0%, var(--bg-bawah) 62%);
+  background-size:
+    var(--grid-jarak) var(--grid-jarak),
+    var(--grid-jarak) var(--grid-jarak),
+    var(--grid-jarak) var(--grid-jarak),
+    100% 100%,
+    100% 100%;
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Angka teknis — durasi, ukuran file, timestamp — pakai mono bertabel supaya
+   digitnya sejajar antar baris dan mudah dibandingkan sekilas. */
+.mono,
+.tag,
+.hint strong,
+code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fokus keyboard tidak pernah dihilangkan — hanya diperhalus. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+::selection {
+  background: rgba(181, 103, 194, 0.35);
+}
+
+/* ==========================================================================
+   Kerangka
+   ========================================================================== */
+
+.shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-5) var(--sp-7);
+}
+
+/* Grid tiga kolom `1fr auto 1fr`, bukan flex `space-between`.
+   Kolom kiri dan kanan diberi lebar yang SAMA (1fr), jadi kolom tengah selalu
+   jatuh tepat di poros halaman berapa pun lebar logo dan slidernya. Dengan
+   flex, nav pil hanya akan berada di tengah kalau kebetulan kedua sisinya
+   sama panjang — dan begitu label di salah satu sisi berubah, ia bergeser. */
+.nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0 var(--sp-6);
+}
+
+.nav-tengah {
+  display: flex;
+  justify-content: center;
+  /* Kolom `auto` boleh menyusut kalau layarnya sempit; tanpa ini nav pil
+     memaksa halaman melebar dan muncul gulir mendatar. */
+  min-width: 0;
+}
+
+.nav-kanan {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-4);
+}
+
+.brand {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.brand::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--grad);
+}
+
+/* ==========================================================================
+   Tipografi
+   ========================================================================== */
+
+.badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  margin-bottom: var(--sp-3);
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+h1.title {
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: var(--sp-3);
+}
+
+h2.section {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.subtitle {
+  font-size: 1.05rem;
+  color: var(--ink-3);
+  margin-bottom: var(--sp-6);
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--ink-4);
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   Kartu fitur
+   ========================================================================== */
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+}
+
+.feature {
+  position: relative;
+  border-radius: var(--r-lg);
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+/* Kartu ini murni informasi — tidak bisa diklik, tidak ke mana-mana.
+   Karena itu tidak ada bayangan elevasi dan tidak ada reaksi hover: mengangkat
+   diri saat disentuh kursor adalah bahasa visual untuk "aku bisa ditekan",
+   dan di sini itu janji palsu. Batas tipis sudah cukup memisahkannya dari latar. */
+
+/* Cahaya gradien ditaruh di lapisan terpisah supaya bisa diredam tanpa
+   mengubah warna teks di atasnya — kontras tetap terjaga. */
+.feature::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.f1::before {
+  background: radial-gradient(circle at 50% -10%, #ffb347, transparent 62%);
+}
+.f2::before {
+  background: radial-gradient(circle at 50% -10%, #e5a1f5, transparent 62%);
+}
+.f3::before {
+  background: radial-gradient(circle at 50% -10%, #f9ed96, transparent 62%);
+}
+
+.feature > * {
+  position: relative;
+}
+
+.feature h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.feature p {
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  margin-top: var(--sp-1);
+}
+
+.card-box {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--sp-4);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  line-height: 1.65;
+}
+
+.grad-text {
+  font-weight: 600;
+  background: linear-gradient(90deg, #ffb347, #e5a1f5);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  padding: 7px 15px;
+  border-radius: var(--r-full);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  width: fit-content;
+  transition: border-color var(--t), background var(--t);
+}
+
+a.pill:hover,
+.pill-aksi:hover:not(:disabled) {
+  border-color: var(--focus);
+  background: var(--surface-3);
+}
+
+/* `.pill` lahir sebagai label hias, dan ukurannya mengikuti itu — sekitar 35px
+   tinggi. Sebagai aksi utama halaman ia perlu 44px, ambang yang membuat ibu
+   jari tidak meleset di layar sentuh. Dibuat sebagai modifier, bukan dengan
+   membesarkan `.pill` itu sendiri, karena dua pemakaian lainnya memang label
+   dan akan terlihat menggelembung tanpa alasan. */
+.pill-aksi {
+  min-height: 44px;
+  padding: 11px 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  /* `.pill` lahir untuk `<a>`, dan tombol tidak mewarisi hal-hal ini dari
+     halaman: `<button>` memakai font bawaan sistem dan kursor panah biasa.
+     Tanpa dua baris ini, tombol berlabel sama akan tampil dengan huruf yang
+     berbeda dari tautan di sebelahnya. */
+  font-family: inherit;
+  cursor: pointer;
+  /* `.pill` hanya mentransisikan warna. Tanpa transform di daftar ini,
+     penekanannya menyentak alih-alih menyusut. */
+  transition: border-color var(--t), background var(--t), transform var(--t), opacity var(--t);
+}
+
+.pill-aksi:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pill-aksi:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pill-aksi:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ==========================================================================
+   Panel & form
+   ========================================================================== */
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.row {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  margin-bottom: var(--sp-2);
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 11px 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  color: var(--ink);
+  transition: border-color var(--t), background var(--t);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ink-4);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--ink-4);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(181, 103, 194, 0.2);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}
+
+input[type="file"] {
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  padding: var(--sp-4);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+
+input[type="file"]:hover:not(:disabled) {
+  border-color: var(--focus);
+  background: var(--surface-3);
+}
+
+input[type="file"]::file-selector-button {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-right: var(--sp-3);
+  padding: 7px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--focus);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--focus);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Target sentuh minimal 44px — label radio/checkbox ikut jadi area klik. */
+label:has(input[type="radio"]),
+label:has(input[type="checkbox"]) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 400;
+  margin-bottom: 0;
+}
+
+/* ==========================================================================
+   Tombol
+   ========================================================================== */
+
+.btn {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 11px 22px;
+  min-height: 44px;
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  transition: transform var(--t), opacity var(--t), background var(--t);
+}
+
+.btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: var(--line-2);
+  color: var(--ink-2);
+}
+
+.btn.ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--ink-4);
+  color: var(--ink);
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Bahan kaca untuk tombol aplikasi
+   ==========================================================================
+
+   Diterapkan ke KELAS, bukan dengan mengganti 21 pemakaian tombol satu per
+   satu. Hasil akhirnya sama sementara perubahannya terkumpul di satu tempat,
+   dan tombol yang ditambahkan nanti ikut tanpa perlu diingat.
+
+   Kesan kacanya dari HALO di sekeliling tombol, bukan dari transparansi.
+   Percobaan pertama gua memakai backdrop-filter dan hasilnya justru menyatu
+   dengan latar — kebalikan dari yang dituju.
+
+   Radius halonya sengaja pendek (11-12px, bukan 20-30px). Halo lebar membuat
+   tepi tombol terbaca berkabut alih-alih berkilau: yang terlihat bukan cahaya
+   yang keluar dari benda padat, melainkan bendanya sendiri yang kehilangan
+   batas. Kesan kaca justru menguat saat halonya rapat ke tepi.
+   ========================================================================== */
+.btn.ghost {
+  background: linear-gradient(180deg, #1b1b1e 0%, #0a0a0c 100%);
+  border-color: rgba(255, 255, 255, 0.11);
+  color: var(--ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 11px 0 rgba(226, 232, 240, 0.086),
+    0 8px 18px -10px rgba(0, 0, 0, 0.85);
+}
+
+.btn.ghost:hover:not(:disabled) {
+  background: linear-gradient(180deg, #232327 0%, #101013 100%);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+  opacity: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 15px 1px rgba(226, 232, 240, 0.13),
+    0 10px 22px -10px rgba(0, 0, 0, 0.9);
+}
+
+/* Tombol utama ikut mendapat halo, tapi TETAP padat dan kontras tinggi. Ia
+   harus menonjol sebagai tindakan utama; menyamakannya dengan tombol sekunder
+   menghapus satu-satunya petunjuk mana yang harus ditekan. */
+.btn:not(.ghost) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 0 11px 0 rgba(226, 232, 240, 0.115),
+    0 8px 18px -10px rgba(0, 0, 0, 0.7);
+}
+
+.pill {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 11px 0 rgba(226, 232, 240, 0.086),
+    0 8px 18px -10px rgba(0, 0, 0, 0.6);
+}
+
+/* ==========================================================================
+   Daftar
+   ========================================================================== */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface);
+  transition: border-color var(--t), background var(--t), transform var(--t);
+}
+
+a.item:hover {
+  border-color: var(--line-2);
+  background: var(--surface-2);
+  transform: translateX(2px);
+}
+
+.item strong {
+  font-size: 0.925rem;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Status
+   ========================================================================== */
+
+.tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 11px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Titik status: warna saja tidak cukup untuk pembaca dengan buta warna,
+   jadi bentuk + teks label selalu ikut membawa maknanya. */
+.tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tag.pending {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: rgba(251, 191, 36, 0.28);
+}
+.tag.done {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.bar {
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.bar > div {
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--grad);
+  transition: width 400ms var(--ease);
+}
+
+/* Garis bergerak saat mengunggah: memberi tahu bahwa sistem masih bekerja
+   meski persentasenya sedang tidak bertambah. */
+.bar.aktif > div {
+  background-image: var(--grad),
+    repeating-linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0.16) 0 12px,
+      transparent 12px 24px
+    );
+  background-blend-mode: overlay;
+  animation: geser 900ms linear infinite;
+}
+
+@keyframes geser {
+  to { background-position: 0 0, 48px 0; }
+}
+
+/* ==========================================================================
+   Pemberitahuan & kondisi kosong
+   ========================================================================== */
+
+.notice {
+  border-radius: var(--r);
+  padding: var(--sp-4);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  border: 1px solid transparent;
+}
+
+.notice.err {
+  background: var(--err-bg);
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.notice.info {
+  background: var(--surface-2);
+  color: var(--ink-3);
+  border-color: var(--line);
+}
+
+/* Dipakai untuk menyatakan konsekuensi pilihan, bukan status sistem: hijau
+   berarti "pilihan ini tidak memakan kuota", kuning berarti "ini akan
+   mengunggah". Token warnanya sudah ada sejak awal, hanya belum ada kelasnya. */
+.notice.ok {
+  background: var(--ok-bg);
+  color: #a7f3d0;
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+.notice.warn {
+  background: var(--warn-bg);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.empty {
+  text-align: center;
+  padding: var(--sp-7) var(--sp-5);
+  color: var(--ink-4);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  background: rgba(18, 24, 33, 0.5);
+}
+
+.empty a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Kerangka pemuatan — mengisi ruang lebih dulu supaya tata letak tidak
+   melompat saat data datang. */
+.skeleton {
+  border-radius: var(--r);
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-3) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: kilau 1.4s ease-in-out infinite;
+}
+
+@keyframes kilau {
+  to { background-position: -200% 0; }
+}
+
+video {
+  width: 100%;
+  max-width: 300px;
+  border-radius: var(--r-lg);
+  background: #000;
+  display: block;
+  border: 1px solid var(--line);
+}
+
+/* ==========================================================================
+   Responsif
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: var(--sp-3) var(--sp-4) var(--sp-6);
+  }
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+  .item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  /* Di layar sempit ketiganya tidak muat sebaris. Nav pil turun ke barisnya
+     sendiri dan tetap di tengah; logo dan slider berbagi baris atas. Yang
+     dikorbankan tinggi, bukan keterbacaan — memampatkan ketiganya ke satu
+     baris akan membuat nav pil terpotong. */
+  .nav {
+    grid-template-columns: 1fr auto;
+    gap: var(--sp-3);
+  }
+  .nav-tengah {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .nav-kanan {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+/* Hormati preferensi sistem: gerakan dimatikan, bukan sekadar dipercepat. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Entrance / login
+   Halaman ini keluar dari .shell dan mengambil seluruh viewport, karena
+   partikelnya baru terasa kalau punya ruang penuh.
+   ========================================================================== */
+
+.masuk {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Boleh digulir. Form "Daftar" punya tiga kolom, dan pada layar pendek ia
+     lebih tinggi daripada layarnya — dengan `overflow: hidden`, judul di atas
+     terpotong dan tidak ada cara mencapainya. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #05070a;
+  padding: var(--sp-6) var(--sp-5) clamp(var(--sp-6), 9vh, 88px);
+  z-index: 50;
+}
+
+/* Kanvas dan tirai `fixed`, bukan `absolute`: wadahnya sekarang bisa digulir,
+   dan latar yang ikut tergulir akan menyingkap warna kosong di bawahnya. */
+.masuk-kanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* Tirai gelap dari bawah: partikel di belakang teks akan merusak kontras,
+   dan teks di atas latar bergerak adalah kegagalan keterbacaan yang klasik. */
+.masuk-tirai {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(5, 7, 10, 0.72) 0%,
+    rgba(5, 7, 10, 0.42) 22%,
+    rgba(5, 7, 10, 0.14) 48%,
+    transparent 70%
+  );
+}
+
+.masuk-isi {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 480px;
+  /* `margin-top: auto`, BUKAN `justify-content: flex-end` pada wadahnya.
+     Keduanya sama-sama mendorong isi ke bawah saat ruangnya lega, tapi
+     `flex-end` membuat bagian yang meluap ke ATAS tidak bisa dijangkau gulir —
+     bug flexbox yang sudah lama dikenal. Margin otomatis luruh jadi nol begitu
+     ruang bebasnya habis, jadi isinya tetap tergulir dari atas. */
+  margin-top: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: naik 600ms var(--ease) both;
+}
+
+/* Tanggung jawab kontras dipindahkan dari tirai seluruh layar ke elips lokal
+   di belakang teks saja. Partikel tetap terlihat di hampir seluruh viewport,
+   sementara area yang benar-benar butuh keterbacaan tetap gelap. */
+.masuk-isi::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 190%;
+  height: 165%;
+  transform: translate(-50%, -50%);
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(5, 7, 10, 0.9) 0%,
+    rgba(5, 7, 10, 0.72) 38%,
+    rgba(5, 7, 10, 0.32) 66%,
+    transparent 84%
+  );
+}
+
+/* Jaring pengaman kalau ada partikel terang yang lewat persis di belakang
+   huruf — bayangan ini yang menahan kontras, bukan tirainya. */
+.masuk-judul,
+.masuk-sub {
+  text-shadow: 0 2px 18px rgba(5, 7, 10, 0.95);
+}
+
+@keyframes naik {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.masuk-judul {
+  font-size: clamp(2.3rem, 8vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  margin-bottom: var(--sp-4);
+}
+
+.masuk-judul-grad {
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.42) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.masuk-sub {
+  font-size: 0.95rem;
+  color: var(--ink-3);
+  max-width: 380px;
+  margin-bottom: var(--sp-5);
+  line-height: 1.65;
+}
+
+.masuk-mulai {
+  padding: 14px 34px;
+  font-size: 0.95rem;
+  background: #fff;
+  color: #05070a;
+  box-shadow: 0 0 0 0 rgba(245, 195, 68, 0.5);
+  transition: box-shadow 400ms var(--ease), transform var(--t);
+}
+
+.masuk-mulai:hover:not(:disabled) {
+  opacity: 1;
+  box-shadow: 0 0 28px 0 rgba(245, 195, 68, 0.35);
+}
+
+.masuk-form {
+  width: 100%;
+  /* Lebih lebar dari 340px sebelumnya: kolom berbentuk pil dengan tombol bulat
+     di dalamnya butuh ruang mendatar, dan pil sempit membuat tombolnya terlihat
+     menghimpit teksnya sendiri. */
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  text-align: left;
+  animation: naik 320ms var(--ease) both;
+}
+
+.masuk-form label {
+  margin-bottom: 0;
+}
+
+/* Kolom sandi berbentuk pil tinggi dengan tombol kirim BULAT di dalamnya.
+   Tombolnya duduk di dalam kolom, bukan di bawahnya: keduanya satu tindakan —
+   isi lalu kirim — dan memisahkannya menambah satu perhentian mata untuk
+   sesuatu yang sudah jelas urutannya. */
+.masuk-kolom {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.masuk-kolom input {
+  width: 100%;
+  height: 58px;
+  /* Ruang kanan disisakan untuk tombolnya, supaya sandi panjang berhenti
+     sebelum tertimpa alih-alih menyelip di baliknya. */
+  padding: 0 68px 0 26px;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+  font-size: 0.95rem;
+  transition: border-color var(--t), background var(--t);
+}
+
+.masuk-kolom input::placeholder {
+  color: var(--ink-4);
+}
+
+.masuk-kolom input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.masuk-kirim {
+  position: absolute;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--t), border-color var(--t), transform var(--t);
+}
+
+.masuk-kirim:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.masuk-kirim:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.masuk-kirim:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.masuk-kirim:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Cincin berputar menggantikan panah saat sandi sedang diperiksa. Tombolnya
+   tetap di tempat yang sama dan seukuran — kolomnya tidak boleh bergeser tepat
+   saat pengguna menunggu jawaban. */
+.masuk-putar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--ink);
+  animation: masuk-putar 700ms linear infinite;
+}
+
+@keyframes masuk-putar {
+  to { transform: rotate(360deg); }
+}
+
+/* "Kembali" sengaja tanpa bingkai. Ia jalan keluar, bukan pilihan kedua yang
+   setara — memberinya bentuk tombol penuh membuatnya bersaing dengan satu
+   tindakan yang sebenarnya ada di halaman ini. */
+.masuk-kembali {
+  all: unset;
+  cursor: pointer;
+  align-self: center;
+  padding: 8px 14px;
+  border-radius: var(--r-full);
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  transition: color var(--t), background var(--t);
+}
+
+.masuk-kembali:hover:not(:disabled) {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.masuk-kembali:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.masuk-kembali:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  /* Di layar kecil isinya di tengah, bukan di bawah. Dikerjakan dengan margin
+     otomatis di kedua sisi, dengan alasan yang sama seperti di atas. */
+  .masuk-isi {
+    margin-bottom: auto;
+  }
+  .masuk-tirai {
+    /* Di layar kecil konten ada di tengah, jadi tirai bawah tak lagi berguna;
+       yang menjaga kontras cukup elips di belakang teks. */
+    background: linear-gradient(
+      to top,
+      rgba(5, 7, 10, 0.5) 0%,
+      rgba(5, 7, 10, 0.22) 45%,
+      rgba(5, 7, 10, 0.1) 75%,
+      transparent 100%
+    );
+  }
+}
+
+/* Nav global disembunyikan di halaman entrance. Bukan sekadar soal tampilan:
+   kalau hanya tertutup kanvas, tautannya tetap bisa dijangkau Tab dan pembaca
+   layar — fokus berpindah ke sesuatu yang tak terlihat. */
+.shell:has(.masuk) .nav {
+  display: none;
+}
+
+/* ==========================================================================
+   Kinetic grid (latar home)
+   z-index negatif supaya seluruh isi .shell — termasuk nav — otomatis berada
+   di atasnya tanpa perlu menaikkan z-index satu per satu.
+   ========================================================================== */
+
+.kisi {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.kisi canvas {
+  display: block;
+}
+
+/* ==========================================================================
+   Dialog konfirmasi
+   ========================================================================== */
+
+.modal-latar {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5);
+  background: rgba(5, 7, 10, 0.72);
+  /* Blur pada latar memisahkan dialog dari halaman tanpa menggelapkannya
+     sampai isinya tak terbaca — konteksnya tetap terlihat. */
+  backdrop-filter: blur(6px);
+  animation: modal-latar-masuk 180ms var(--ease) both;
+}
+
+.modal-kartu {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-lg);
+  animation: modal-kartu-masuk 220ms var(--ease) both;
+}
+
+.modal-judul {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin-bottom: var(--sp-2);
+}
+
+.modal-pesan {
+  font-size: 0.9rem;
+  color: var(--ink-3);
+  line-height: 1.6;
+  margin-bottom: var(--sp-5);
+}
+
+.modal-aksi {
+  display: flex;
+  gap: var(--sp-3);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* Tombol bahaya diberi warna penuh, bukan sekadar garis: ia harus terbaca
+   sebagai tindakan yang berbeda kelas dari Batal di sebelahnya. */
+.modal-bahaya {
+  background: var(--err);
+  color: #1a0a0a;
+}
+
+.modal-bahaya:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+@keyframes modal-latar-masuk {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-kartu-masuk {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Gerak dimatikan, bukan dipercepat — dialog yang meluncur adalah persis jenis
+   gerak yang dimaksud setelan ini. */
+@media (prefers-reduced-motion: reduce) {
+  .modal-latar,
+  .modal-kartu {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Bilah progres
+   ========================================================================== */
+.pb {
+  width: 100%;
+}
+
+.pb-atas {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.pb-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+/* Grid satu sel: kedua teks menempati tempat yang SAMA, jadi crossfade-nya
+   terjadi di posisi tetap dan tidak menggeser apa pun di sekitarnya. */
+.pb-kanan {
+  display: grid;
+  flex-shrink: 0;
+  justify-items: end;
+  color: var(--ink-3);
+}
+
+.pb-pending,
+.pb-persen {
+  grid-column: 1;
+  grid-row: 1;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.pb-persen {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rangka dengan bayangan ke DALAM: bilahnya terbaca sebagai alur yang diisi,
+   bukan sebagai balok yang ditempel di atas permukaan. */
+.pb-rangka {
+  margin-top: var(--sp-2);
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.pb-jalur {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+.pb-isi {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: left center;
+  border-radius: 3px;
+  background: var(--grad);
+}
+
+.pb-kilat {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: block;
+  width: 40%;
+  border-radius: 3px;
+  background: var(--grad);
+}
+
+/* ==========================================================================
+   Tombol kaca
+   ==========================================================================
+
+   Kesan kacanya datang dari HALO lembut di sekeliling tombol, bukan dari latar
+   yang menembus. Versi pertama gua memakai backdrop-filter dan hasilnya keliru:
+   tombol jadi transparan dan menyatu dengan latar, sementara yang dituju justru
+   tombol PADAT yang tampak menyala dari tepinya.
+
+   Tiga lapis bayangan menyusunnya:
+     1. pantulan tipis di tepi atas (inset)  — memberi ketebalan
+     2. halo menyebar di sekeliling          — sumber kesan kacanya
+     3. bayangan jatuh di bawah              — mendudukkannya di atas latar
+   ========================================================================== */
+.glass-button-wrap {
+  position: relative;
+  display: inline-block;
+  border-radius: var(--r-full);
+}
+
+.glass-button {
+  all: unset;
+  position: relative;
+  isolation: isolate;
+  z-index: 1;
+  display: block;
+  cursor: pointer;
+  border-radius: var(--r-full);
+  color: #f6f7f9;
+  background: linear-gradient(180deg, #1b1b1e 0%, #0a0a0c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 12px 0 rgba(226, 232, 240, 0.094),
+    0 8px 20px -10px rgba(0, 0, 0, 0.85);
+  transition:
+    transform var(--t),
+    box-shadow var(--t),
+    border-color var(--t);
+}
+
+.glass-button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 16px 1px rgba(226, 232, 240, 0.144),
+    0 10px 24px -10px rgba(0, 0, 0, 0.9);
+}
+
+.glass-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.glass-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.glass-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Mode terang: tombol putih dengan halo abu lembut. Halo terang di atas latar
+   terang tidak terlihat sama sekali, jadi arahnya dibalik jadi bayangan. */
+.glass-button-text {
+  position: relative;
+  display: block;
+  user-select: none;
+  letter-spacing: -0.02em;
+}
+
+.glass-button-default { font-size: 16px; font-weight: 600; }
+.glass-button-default .glass-button-text { padding: 14px 26px; }
+
+.glass-button-sm { font-size: 14px; font-weight: 600; }
+.glass-button-sm .glass-button-text { padding: 9px 18px; }
+
+.glass-button-lg { font-size: 18px; font-weight: 600; }
+.glass-button-lg .glass-button-text { padding: 16px 34px; }
+
+.glass-button-icon { width: 44px; height: 44px; }
+.glass-button-icon .glass-button-text {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* Elemen bayangan terpisah tidak lagi diperlukan: halonya sudah ada di
+   box-shadow tombol. Disembunyikan, bukan dihapus dari komponen, supaya
+   markup-nya tetap sama dengan aslinya. */
+.glass-button-shadow {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-button { transition: none; }
+  .glass-button:active:not(:disabled) { transform: none; }
+}
+
+/* ==========================================================================
+   Hover: rim cahaya yang berputar mengelilingi tepi
+   ==========================================================================
+
+   Saat diam, pantulan terkumpul di tepi atas — seolah ada satu sumber cahaya
+   di atas. Saat hover, titik terang itu BERPUTAR mengelilingi tepi tombol.
+
+   Dikerjakan dengan conic-gradient yang di-mask jadi setebal 1px, lalu
+   sudutnya dianimasikan. Sudut hanya bisa dianimasikan kalau tipenya
+   dideklarasikan lewat @property — tanpa itu browser memperlakukannya sebagai
+   teks biasa dan perpindahannya melompat, bukan berputar.
+
+   Rim-nya elemen semu terpisah, bukan border tombol: border ikut menghitung
+   ulang tata letak saat berubah, sementara elemen semu tidak menyentuh apa pun
+   di sekitarnya.
+   ========================================================================== */
+@property --rim-sudut {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.btn,
+.pill,
+.glass-button,
+.kembali-bulat {
+  position: relative;
+}
+
+.btn::before,
+.pill::before,
+.glass-button::before,
+.kembali-bulat::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--rim-sudut),
+    transparent 0deg,
+    rgba(255, 255, 255, 0.75) 35deg,
+    rgba(255, 255, 255, 0.15) 70deg,
+    transparent 110deg
+  );
+  /* Dua mask yang saling meniadakan menyisakan CINCIN setebal padding.
+     Tanpa ini, gradiennya mengisi seluruh tombol dan menutupi teksnya. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms var(--ease);
+}
+
+.btn:hover:not(:disabled)::before,
+.pill:hover::before,
+.glass-button:hover:not(:disabled)::before,
+.kembali-bulat:hover::before {
+  opacity: 1;
+  animation: rim-berputar 2.2s linear infinite;
+}
+
+@keyframes rim-berputar {
+  to { --rim-sudut: 360deg; }
+}
+
+/* Rim yang berputar tanpa henti adalah gerakan berulang tepat di titik yang
+   sedang dilihat pengguna. Yang meminta gerakan dikurangi tetap mendapat
+   penanda hover — hanya putarannya yang berhenti. */
+@media (prefers-reduced-motion: reduce) {
+  .btn:hover:not(:disabled)::before,
+  .pill:hover::before,
+  .glass-button:hover:not(:disabled)::before,
+  .kembali-bulat:hover::before {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Kartu project
+   ==========================================================================
+
+   Menggantikan baris daftar yang datar. Baris hanya bisa menampung judul dan
+   status; kartu memberi tempat untuk progres tiap project — dan progres itulah
+   yang paling sering dicari saat halaman ini dibuka.
+
+   Cahaya berwarna di sudut kanan atas dibuat berbeda tiap kartu. Bukan hiasan:
+   deretan kartu yang identik sulit dipakai sebagai penanda posisi saat
+   menggulir, dan warna memberi titik pegangan yang tidak menambah teks apa pun.
+   ========================================================================== */
+.kartu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--sp-4);
+}
+
+.kartu {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-4) var(--sp-5);
+  min-height: 190px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  transition: transform var(--t), border-color var(--t), box-shadow var(--t);
+}
+
+/* Cahaya sudut. Elemen semu supaya ia bisa melampaui tepi kartu tanpa
+   mengubah tata letak, lalu dipotong oleh overflow: hidden. */
+.kartu::after {
+  content: "";
+  position: absolute;
+  top: -55%;
+  right: -35%;
+  width: 85%;
+  height: 150%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--kartu-cahaya), transparent 72%);
+  opacity: 0.85;
+  transition: opacity var(--t);
+  pointer-events: none;
+}
+
+/* Empat rona di dalam rentang yang sama dengan video latar (210-265 derajat),
+   bukan empat warna yang berbeda jauh. Hijau, kuning, dan merah yang dulu
+   dipakai membuat grid kartu terlihat seperti penanda status — padahal ia cuma
+   variasi agar kartu bersebelahan tidak kembar. */
+.kartu-0 { --kartu-cahaya: rgba(56, 189, 248, 0.45); }
+.kartu-1 { --kartu-cahaya: rgba(96, 165, 250, 0.45); }
+.kartu-2 { --kartu-cahaya: rgba(129, 140, 248, 0.42); }
+.kartu-3 { --kartu-cahaya: rgba(167, 139, 250, 0.42); }
+
+.kartu:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-lg);
+}
+
+.kartu:hover::after {
+  opacity: 1;
+}
+
+.kartu-atas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.kartu-tanggal {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
+.kartu-tengah {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.kartu-judul {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  /* Nama berkas sering panjang. Dipotong dua baris, bukan satu: satu baris
+     memotong terlalu awal dan dua nama berbeda jadi terlihat sama. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.kartu-konsep {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+
+.kartu-progress-atas {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.kartu-persen {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.kartu-bar {
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.kartu-bar > div {
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--grad);
+  transition: width 400ms var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kartu { transition: none; }
+  .kartu:hover { transform: none; }
+  .kartu-bar > div { transition: none; }
+}
+
+/* ==========================================================================
+   Penanda proses berjalan
+   Bentuk berputar sambil bermetamorfosis: persegi membulat -> lingkaran ->
+   persegi. Siklusnya bisa diikuti mata, jadi menunggu lama terasa berjalan
+   alih-alih menggantung — hal yang tidak diberikan spinner lingkaran, karena
+   lingkaran yang berputar terlihat sama persis di detik pertama dan menit
+   kelima.
+   ========================================================================== */
+.memuat {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/* DUA animasi, bukan satu.
+   Putaran dan perubahan bentuk butuh timing yang berlawanan: putaran harus
+   `linear` supaya tidak tersendat di tiap keyframe, sedangkan bentuknya justru
+   perlu `ease-in-out` agar berhenti sejenak di persegi dan di lingkaran —
+   dua keadaan yang jadi terbaca karena ditahan sebentar.
+   Menggabungkan keduanya memaksa satu timing untuk dua kebutuhan, dan hasilnya
+   selalu salah di salah satunya.
+
+   Durasinya juga sengaja tidak sama (2.6s vs 2.0s). Kelipatan persekutuannya
+   13 detik, jadi kombinasi sudut-dan-bentuk tidak terlihat mengulang di siklus
+   pendek — mata tidak sempat menebak polanya. */
+.memuat-bentuk {
+  display: block;
+  background: var(--ink);
+  border-radius: 26%;
+  animation:
+    memuat-putar 2.6s linear infinite,
+    memuat-lentur 2s ease-in-out infinite;
+}
+
+@keyframes memuat-putar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes memuat-lentur {
+  0% { border-radius: 26%; }
+  35% { border-radius: 50%; }
+  70% { border-radius: 30%; }
+  100% { border-radius: 26%; }
+}
+
+.memuat-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+/* Gerakan berputar tanpa henti tepat di titik yang sedang dilihat pengguna
+   adalah yang paling mengganggu bagi yang sensitif terhadap gerakan. Yang
+   tersisa: bentuk yang berdenyut pelan — tetap menyatakan "sedang bekerja". */
+@media (prefers-reduced-motion: reduce) {
+  .memuat-bentuk {
+    animation: memuat-denyut 1.8s ease-in-out infinite;
+    border-radius: 32%;
+  }
+  @keyframes memuat-denyut {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+}
+
+/* Bentuk di kiri, bilah progres mengisi sisanya. Keduanya rata tengah secara
+   tegak supaya bentuknya sejajar dengan label tahap, bukan dengan bilahnya —
+   label yang dibaca lebih dulu. */
+.proses {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--sp-5, 20px);
+}
+
+.proses .stack {
+  min-width: 0;
+}
+
+/* ==========================================================================
+   Navigasi pil
+   Wadah membulat berisi item, dengan satu indikator yang meluncur mengikuti
+   kursor. Indikatornya elemen tunggal yang berpindah — bukan latar yang
+   menyala-padam per item — supaya matanya mengikuti benda yang sama berjalan,
+   dan ketiga item terbaca sebagai satu deret.
+   ========================================================================== */
+.navpil {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--navpil-bg);
+  border: 1px solid var(--navpil-garis);
+  /* Indikator diposisikan absolut di dalam sini; `contain` menahan perhitungan
+     layout-nya supaya tidak merambat ke sisa halaman tiap frame animasi. */
+  contain: layout;
+}
+
+.navpil-indikator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: 999px;
+  background: var(--navpil-pil);
+  /* Di bawah teks, bukan di atasnya. Kalau di atas, teks item yang sedang
+     ditunjuk tertutup pilnya sendiri. */
+  z-index: 0;
+  opacity: 0;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 4px 12px rgb(0 0 0 / 0.12);
+}
+
+.navpil-item {
+  position: relative;
+  z-index: 1;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* --ink-3 hanya mencapai 4.4:1 di atas latar terang — di bawah ambang baca.
+     Item ini tetap terlihat subordinat terhadap pil karena pilnya punya latar
+     sendiri, bukan karena teksnya diredupkan sampai sulit dibaca. */
+  color: var(--ink-2);
+  padding: 9px 16px;
+  border-radius: 999px;
+  white-space: nowrap;
+  /* Warnanya saja yang bertransisi. Pil di belakangnya sudah bergerak dengan
+     pegas; menambah transisi pada item membuat dua gerakan bersaing. */
+  transition: color 0.18s ease;
+}
+
+/* Item yang sedang ditunjuk pil memakai warna KEBALIKAN dari latar pil, bukan
+   warna aksen. Pil terang berarti teks gelap, dan sebaliknya — kontras itu yang
+   membuat labelnya tetap terbaca saat pil tiba di bawahnya. */
+.navpil-item-terang {
+  color: var(--navpil-teks-aktif);
+}
+
+.navpil-item:focus-visible {
+  outline: 2px solid var(--navpil-pil);
+  outline-offset: 2px;
+}
+
+/* Wadahnya sudah kontras dengan latar halaman; hover per item ditangani
+   indikator. Yang tersisa untuk item non-aktif hanya sedikit penerangan supaya
+   perangkat tanpa kursor tetap punya umpan balik saat ditekan. */
+.navpil-item:active {
+  color: var(--ink);
+}
+
+/* ==========================================================================
+   Menu profil
+   ========================================================================== */
+.profil {
+  position: relative;
+  display: inline-flex;
+}
+
+.profil-pemicu {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 3px;
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+  color: var(--ink-3);
+  transition: background var(--t), border-color var(--t), color var(--t);
+}
+
+.profil-pemicu:hover,
+.profil-pemicu-aktif {
+  background: var(--navpil-bg);
+  border-color: var(--navpil-garis);
+  color: var(--ink);
+}
+
+.profil-pemicu:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.profil-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Panah membalik arah saat terbuka. Ia menyatakan ke mana panel akan pergi
+   kalau ditekan lagi — bukan sekadar hiasan yang ikut berputar. */
+.profil-panah {
+  transition: transform 240ms var(--ease);
+}
+
+.profil-panah-naik {
+  transform: rotate(180deg);
+}
+
+.profil-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  width: 224px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--profil-panel-bg);
+  border: 1px solid var(--profil-panel-garis);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.2),
+    0 16px 40px -12px rgb(0 0 0 / 0.55);
+}
+
+/* Padding pindah ke tautan di dalamnya, supaya seluruh area yang terlihat
+   ikut bisa diklik — bukan hanya teks dan avatarnya. */
+.profil-kepala {
+  display: flex;
+}
+
+.profil-avatar-besar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* Tanpa ini, nama panjang mendorong lebar panel alih-alih terpotong. */
+.profil-kepala-teks {
+  display: block;
+  min-width: 0;
+}
+
+.profil-judul {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+.profil-sub {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profil-pisah {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--profil-panel-garis);
+}
+
+.profil-daftar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.profil-li-pisah {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--profil-panel-garis);
+}
+
+.profil-item {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  /* Padding kiri menyisakan ruang untuk batang aksen, supaya teks tidak
+     bergeser saat batangnya muncul. */
+  padding: 8px 10px 8px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  position: relative;
+  transition: background var(--t), color var(--t);
+}
+
+/* Batang aksen di tepi kiri, bukan hanya latar yang menyala. Latar saja mudah
+   luput saat mata menyusuri daftar cepat-cepat; batang tegak memotong arah
+   bacaan, jadi ia tertangkap lebih dulu. */
+.profil-item::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 2px;
+  height: 0;
+  border-radius: 2px;
+  background: currentColor;
+  transform: translateY(-50%);
+  transition: height 180ms var(--ease);
+}
+
+.profil-item:hover,
+.profil-item:focus-visible {
+  background: var(--profil-item-hover);
+  color: var(--ink);
+}
+
+.profil-item:hover::before,
+.profil-item:focus-visible::before {
+  height: 16px;
+}
+
+.profil-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+
+.profil-item-bahaya:hover,
+.profil-item-bahaya:focus-visible {
+  color: var(--err);
+}
+
+.profil-ikon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.profil-kaki {
+  padding: 4px 12px 6px;
+  font-size: 0.7rem;
+  color: var(--ink-4);
+}
+
+/* ==========================================================================
+   Halaman profil
+   Bentuknya mengikuti PlaceRadar: kolom terpusat, avatar di kotak membulat,
+   kartu pekat berisi baris label-kiri/nilai-kanan, lalu tombol pil. Warnanya
+   memakai token sendiri supaya ia tetap benar di kedua tema — menyalin nilai
+   hex-nya mentah-mentah akan menghasilkan kartu gelap yang menganga di tengah
+   halaman terang.
+   ========================================================================== */
+.profil-halaman {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--sp-6) 0 var(--sp-7);
+}
+
+/* Tombol kembali duduk di kiri atas, tidak ikut terpusat bersama isi
+   halamannya. Tindakan navigasi tidak berbagi sumbu dengan bacaan — kalau ikut
+   di tengah, ia terbaca sebagai bagian dari isinya. */
+.profil-halaman-kembali-bulat {
+  align-self: flex-start;
+}
+
+.profil-halaman-judul {
+  margin-top: var(--sp-6);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  letter-spacing: 0.06em;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.profil-halaman-judul strong {
+  font-weight: 700;
+}
+
+.profil-halaman-avatar {
+  margin-top: var(--sp-5);
+  width: 116px;
+  height: 116px;
+  /* Kotak membulat, bukan lingkaran penuh — bentuk yang sama dengan kartu di
+     bawahnya, jadi keduanya terbaca sebagai satu keluarga. */
+  border-radius: 28px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.45);
+}
+
+.profil-halaman-kartu {
+  margin-top: var(--sp-6);
+  width: 100%;
+  max-width: 520px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-4) var(--sp-5);
+  text-align: left;
+  padding: var(--sp-6) var(--sp-6);
+  border-radius: 28px;
+  background: var(--profil-kartu-bg);
+  border: 1px solid var(--profil-kartu-garis);
+  box-shadow: 0 22px 60px -28px rgb(0 0 0 / 0.5);
+}
+
+.profil-halaman-kartu dt {
+  font-size: 0.9rem;
+  color: var(--profil-kartu-label);
+}
+
+.profil-halaman-kartu dd {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--profil-kartu-nilai);
+  text-align: right;
+  /* Nilai panjang (tanggal, kalimat) dibiarkan patah alih-alih melebarkan
+     kolomnya dan mendorong label keluar. */
+  overflow-wrap: anywhere;
+}
+
+.profil-halaman-aksi {
+  margin-top: var(--sp-6);
+  width: 100%;
+  max-width: 520px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
+}
+
+.profil-halaman-tombol {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 12px 24px;
+  border-radius: var(--r-full);
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  transition: background var(--t), border-color var(--t), transform var(--t);
+}
+
+.profil-halaman-tombol:hover {
+  background: var(--surface-3);
+  border-color: var(--focus);
+}
+
+.profil-halaman-tombol:active {
+  transform: scale(0.98);
+}
+
+.profil-halaman-tombol:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Keluar mengambil satu baris penuh di bawah keduanya. Ia satu-satunya yang
+   membuang keadaan, dan menaruhnya sejajar dengan tautan biasa membuatnya
+   mudah tertekan tanpa sengaja. */
+.profil-halaman-tombol-keluar {
+  grid-column: 1 / -1;
+  color: var(--err);
+  border-color: rgba(248, 113, 113, 0.3);
+  background: transparent;
+}
+
+.profil-halaman-tombol-keluar:hover {
+  background: var(--err-bg);
+  border-color: var(--err);
+}
+
+@media (max-width: 640px) {
+  .profil-halaman-aksi {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Kepala dropdown bisa diklik menuju halaman profil. Ia terlihat seperti
+   pernyataan pasif, jadi ia butuh tanda hover — tanpa itu tidak ada yang
+   mengisyaratkan bahwa ia tujuan, bukan sekadar keterangan. */
+.profil-kepala-tautan {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background var(--t);
+}
+
+.profil-kepala-tautan:hover,
+.profil-kepala-tautan:focus-visible {
+  background: var(--profil-item-hover);
+  outline: none;
+}
+
+/* Ajakan utama di ujung nav pil. Ia duduk di wadah yang sama tapi di luar
+   jangkauan indikator — indikator menandai "kamu sedang di sini", tombol ini
+   menandai "mulai dari sini", dan mencampur keduanya membuat tombolnya
+   kehilangan warnanya sendiri tiap kali pil putih menutupinya. */
+.navpil-aksi {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--navpil-teks-aktif);
+  background: var(--navpil-pil);
+  transition: opacity var(--t), transform var(--t);
+}
+
+.navpil-aksi:hover {
+  opacity: 0.88;
+}
+
+.navpil-aksi:active {
+  transform: scale(0.97);
+}
+
+.navpil-aksi:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Masuk: tab mode, pemisah, mode tamu
+   ========================================================================== */
+
+/* Dua tab dalam satu alur, bukan tautan "sudah punya akun?" di bawah form.
+   Tautan itu memindahkan halaman; tab menukar isi di tempat, jadi apa yang
+   sudah diketik tidak hilang saat orang salah pilih di awal. */
+.masuk-mode {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-self: center;
+}
+
+.masuk-mode-tab {
+  all: unset;
+  cursor: pointer;
+  padding: 8px 22px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  transition: background var(--t), color var(--t);
+}
+
+.masuk-mode-tab:hover {
+  color: var(--ink);
+}
+
+.masuk-mode-aktif {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.masuk-mode-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Baris email yang diingat perangkat. Ia menggantikan kolom, jadi tingginya
+   dibuat mendekati tinggi kolom — kalau jauh lebih pendek, form melompat naik
+   turun tiap kali "bukan kamu?" ditekan. */
+.masuk-ingat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: 0.88rem;
+}
+
+.masuk-ingat-email {
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.masuk-ganti {
+  all: unset;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 0.76rem;
+  color: var(--ink-4);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color var(--t);
+}
+
+.masuk-ganti:hover:not(:disabled) {
+  color: var(--ink-2);
+}
+
+.masuk-ganti:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Garis dengan kata di tengahnya. Grid tiga kolom, bukan pseudo-elemen
+   ber-flex: lebar kedua garisnya jadi sama persis tanpa bergantung pada panjang
+   katanya. */
+.masuk-pisah {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--sp-4);
+  margin: var(--sp-2) 0;
+  font-size: 0.76rem;
+  color: var(--ink-4);
+}
+
+.masuk-pisah::before,
+.masuk-pisah::after {
+  content: "";
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.masuk-tamu {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  border-radius: var(--r-full);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background var(--t), border-color var(--t), color var(--t);
+}
+
+.masuk-tamu:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--ink);
+}
+
+.masuk-tamu:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.masuk-tamu:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.masuk-catatan {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--ink-4);
+  text-align: center;
+}
+
+.profil-kaki-tamu {
+  color: var(--warn);
+  padding-bottom: 0;
+}
+
+/* ==========================================================================
+   Profil: edit dan kelola akun
+   ========================================================================== */
+.profil-halaman-sempit .profil-halaman-kartu,
+.profil-edit {
+  max-width: 520px;
+}
+
+.profil-halaman-sub {
+  margin-top: var(--sp-3);
+  font-size: 0.85rem;
+  color: var(--ink-3);
+}
+
+.profil-halaman-catatan {
+  margin-top: var(--sp-5);
+  max-width: 520px;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--ink-4);
+  text-align: left;
+}
+
+/* Foto profil sebagai tautan: tirai kamera muncul saat disorot. Ikon yang
+   selalu terlihat menutupi wajah di foto; yang hanya muncul saat disorot
+   menyampaikan hal yang sama tanpa mengorbankan gambarnya. */
+.profil-halaman-avatar-tautan {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  transition: transform var(--t), border-color var(--t);
+}
+
+.profil-halaman-avatar-tautan:hover {
+  transform: translateY(-2px);
+  border-color: var(--focus);
+}
+
+.profil-halaman-avatar-tautan:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.profil-halaman-foto {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profil-halaman-avatar-tirai {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 7, 10, 0.55);
+  color: #f8fafc;
+  opacity: 0;
+  transition: opacity var(--t);
+}
+
+.profil-halaman-avatar-tautan:hover .profil-halaman-avatar-tirai,
+.profil-halaman-avatar-tautan:focus-visible .profil-halaman-avatar-tirai {
+  opacity: 1;
+}
+
+.profil-edit {
+  width: 100%;
+  margin-top: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  text-align: left;
+}
+
+/* Tiap bagian punya tombol simpannya sendiri. Satu tombol untuk semuanya akan
+   memaksa mengisi password lama hanya karena ingin mengganti username. */
+.profil-edit-blok {
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.profil-edit-blok form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.profil-edit-judul {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: var(--sp-4);
+}
+
+.profil-edit-simpan {
+  align-self: flex-start;
+}
+
+.profil-edit-foto-baris {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+}
+
+.profil-edit-foto {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  cursor: pointer;
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  transition: border-color var(--t);
+}
+
+.profil-edit-foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profil-edit-foto:hover:not(:disabled) {
+  border-color: var(--focus);
+}
+
+.profil-edit-foto:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.profil-edit-foto:disabled {
+  cursor: wait;
+}
+
+.profil-edit-foto-tirai {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 5px 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  color: #f8fafc;
+  background: rgba(5, 7, 10, 0.66);
+}
+
+/* Daftar perangkat */
+.perangkat-daftar {
+  list-style: none;
+  margin: var(--sp-6) 0 0;
+  padding: 0;
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.perangkat {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.perangkat-ini {
+  border-color: var(--ok);
+}
+
+.perangkat-ikon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.perangkat-teks {
+  min-width: 0;
+}
+
+.perangkat-nama {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.perangkat-lencana {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.perangkat-waktu {
+  font-size: 0.75rem;
+  color: var(--ink-4);
+}
+
+/* ==========================================================================
+   Tombol kembali bulat
+   Bahan kacanya sama dengan tombol lain: padat, pantulan tipis di tepi atas,
+   halo rapat di sekelilingnya, dan cincin berputar saat disorot. Yang berbeda
+   hanya bentuknya — lingkaran, karena isinya satu ikon dan bukan teks.
+   ========================================================================== */
+.kembali-bulat {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 48px, di atas ambang 44px untuk target sentuh. Tombol ikon tanpa teks tidak
+     punya area tambahan dari labelnya, jadi ukurannya harus datang dari
+     dirinya sendiri. */
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: linear-gradient(180deg, #1b1b1e 0%, #0a0a0c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 11px 0 rgba(226, 232, 240, 0.086),
+    0 8px 18px -10px rgba(0, 0, 0, 0.85);
+  transition:
+    transform var(--t),
+    box-shadow var(--t),
+    border-color var(--t);
+}
+
+.kembali-bulat:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 16px 1px rgba(226, 232, 240, 0.13),
+    0 10px 22px -10px rgba(0, 0, 0, 0.9);
+}
+
+/* Bergeser ke KIRI saat disorot, bukan naik. Arah gerakannya sama dengan arah
+   yang ditunjuk panahnya, jadi gerakan itu ikut menyatakan ke mana ia membawa. */
+.kembali-bulat:hover svg {
+  transform: translateX(-2px);
+}
+
+.kembali-bulat svg {
+  transition: transform var(--t);
+}
+
+.kembali-bulat:active {
+  transform: scale(0.95);
+}
+
+.kembali-bulat:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* Tombol kembali yang berdiri sendiri di atas judul halaman. */
+.kembali-atas {
+  margin-bottom: var(--sp-4);
+}
+
+/* ==========================================================================
+   Dashboard: hero video layar penuh
+   ========================================================================== */
+
+/* Video menutupi SELURUH layar, bukan hanya bagian isi halaman. Karena itu ia
+   `position: fixed`, bukan `absolute` di dalam hero yang ditembuskan keluar
+   dengan `width: 100vw`.
+
+   Cara lama itu punya cacat terukur: `100vw` MENGHITUNG lebar scrollbar, jadi
+   di jendela 1265px ia menghasilkan 1280px dan halamannya bisa digulir 8px ke
+   samping. Elemen `fixed` diukur terhadap viewport yang sebenarnya, jadi
+   persoalannya hilang bersama penyebabnya — dan `overflow-x: clip` yang tadinya
+   menambal ikut tidak diperlukan lagi. */
+/* Tingginya diambil dari sisa ruang, bukan dari angka yang ditebak.
+
+   Sebelumnya `calc(100dvh - 96px)` dengan 96px sebagai perkiraan tinggi
+   navbar. Perkiraan itu meleset: di ponsel, tinggi sebenarnya navbar plus
+   padding shell adalah 210px, jadi halamannya kelebihan 42px dan bisa digulir.
+   Video berposisi `fixed` hanya menutupi setinggi layar, jadi 42px sisa itu
+   tampil sebagai pita hitam di bawah videonya.
+
+   Shell dijadikan kolom flex setinggi layar dan hero diberi `flex: 1`. Sisa
+   ruangnya dihitung browser dari tinggi navbar yang SEBENARNYA — berapa pun
+   itu, di breakpoint mana pun, termasuk setelah font selesai dimuat dan
+   mengubah tinggi barisnya. Tidak ada lagi angka yang bisa meleset. */
+.shell:has(.hero) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding-bottom: 0;
+}
+
+.hero {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.hero-video,
+.hero-tirai {
+  position: fixed;
+  inset: 0;
+  /* Di belakang seluruh isi halaman, tapi di atas latar body. */
+  z-index: 0;
+}
+
+/* Navbar dan isi hero sama-sama naik di atas video — tapi navbar harus di atas
+   KEDUANYA.
+   
+   Nilai 1 di sini adalah bug yang sempat tampil: `.hero-isi` punya z-index 10
+   dari aturannya sendiri, jadi isi hero menutupi navbar. Akibatnya dropdown
+   menu profil — yang membuka ke bawah, masuk ke wilayah hero — tertimpa isi
+   hero, dan klik di atasnya mendarat pada elemen di luar menu sehingga menunya
+   langsung menutup lagi. 30 menempatkannya di atas segalanya di halaman ini. */
+.shell:has(.hero) .nav {
+  position: relative;
+  z-index: 30;
+}
+
+.hero-isi {
+  position: relative;
+  z-index: 1;
+}
+
+/* Latar body jadi hitam di halaman ini. Kisi bertitik dan gradasinya tidak akan
+   terlihat sama sekali di balik video yang menutup penuh — yang tersisa hanya
+   kedipan pola pada detik sebelum videonya termuat. */
+body:has(.hero) {
+  background: #000;
+}
+
+/* Membatalkan aturan `video { ... }` global yang dipasang untuk pemutar hasil
+   9:16 di halaman project. `max-width: 300px` di sana mengalahkan `width: 100%`
+   di sini — itulah yang membuat video latar terkunci selebar 300px dan
+   menyisakan layar hitam di sebelahnya. Bingkai, sudut membulat, dan latar
+   hitamnya juga milik pemutar itu, bukan milik latar layar penuh. */
+.hero-video {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  object-fit: cover;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.hero-tirai {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.28) 38%, rgba(0, 0, 0, 0.78) 100%);
+}
+
+.hero-isi {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: clamp(24px, 5vh, 56px) clamp(20px, 5vw, 48px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(32px, 8vh, 80px);
+  color: #fff;
+}
+
+.hero-atas {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-4);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.hero-atas p {
+  max-width: 42ch;
+}
+
+@media (min-width: 1024px) {
+  .hero-atas {
+    font-size: 1rem;
+  }
+}
+
+/* Isi utama didorong ke bawah oleh `margin-top: auto`, bukan oleh
+   `justify-content` di wadahnya — pola yang sama seperti di halaman masuk, dan
+   dengan alasan yang sama: isi yang meluap tetap bisa dijangkau. */
+.hero-tengah {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(16px, 3vh, 28px);
+}
+
+.hero-mata {
+  font-size: 0.75rem;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+@media (min-width: 768px) {
+  .hero-mata {
+    font-size: 0.875rem;
+  }
+}
+
+/* Judul raksasa: 3rem di ponsel sampai 8rem di layar lebar.
+   `line-height: 0.85` membuat kedua barisnya nyaris bersentuhan — di ukuran
+   sebesar ini, jarak baris normal terlihat seperti dua judul terpisah. */
+.hero-judul {
+  display: flex;
+  flex-direction: column;
+  font-size: clamp(3rem, 11vw, 8rem);
+  font-weight: 500;
+  /* 1.04, bukan 0.85 seperti di spesifikasi.
+
+     Angkanya diukur, bukan dikira-kira. Pada Inter 500, ekor terdalam di
+     "panjang" turun 0.219em di bawah garis alas, dan titik "j" di "jadi"
+     menjulang 0.758em di atasnya. Karena jarak antar garis alas SAMA DENGAN
+     line-height, keduanya baru bebas bersentuhan di atas 0.977em. 0.85 di
+     spesifikasi meleset jauh; 0.92 yang sempat dipakai masih kurang 0.057em,
+     dan titik "j" itu menempel pada ekor "p" di atasnya.
+
+     Contoh di spesifikasi berbunyi "Become / Product Leader." — dua baris yang
+     nyaris tanpa turunan huruf, jadi angka serapat itu memang aman DI SANA. */
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+
+/* Kotak latar tiap baris dilebarkan ke atas dan ke bawah, lalu ditarik kembali
+   dengan margin negatif sebesar yang sama.
+
+   Ini bukan hiasan, melainkan perbaikan cacat yang terlihat: `line-height`
+   di bawah 1 membuat kotak barisnya LEBIH PENDEK daripada hurufnya sendiri.
+   Bagian yang menonjol keluar tidak mendapat latar — dan karena warna hurufnya
+   diambil dari latar lewat `background-clip: text`, bagian itu hilang. Yang
+   paling kentara: titik di atas huruf "j" lenyap, sehingga "jadi" terbaca
+   "iadi". Margin negatifnya membuat tata letaknya tidak ikut bergeser. */
+.hero-judul > * {
+  padding-top: 0.16em;
+  padding-bottom: 0.16em;
+  margin-top: -0.16em;
+  margin-bottom: -0.16em;
+}
+
+.hero-judul-putih {
+  color: #fff;
+}
+
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 12px 24px;
+  min-height: 48px;
+  border-radius: var(--r-full);
+  background: #000;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background var(--t), transform var(--t);
+}
+
+@media (min-width: 768px) {
+  .hero-cta {
+    padding: 16px 32px;
+    font-size: 1rem;
+  }
+}
+
+.hero-cta:hover {
+  background: #18181b;
+}
+
+.hero-cta:active {
+  transform: scale(0.98);
+}
+
+.hero-cta:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+/* Panah bergeser ke kanan saat tombolnya disorot — arah gerakannya sama dengan
+   arah yang ditunjuknya. */
+.hero-panah {
+  transition: transform var(--t);
+}
+
+.hero-cta:hover .hero-panah {
+  transform: translateX(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-cta:hover .hero-panah {
+    transform: none;
+  }
+}
+
+/* Kilau menyapu pada teks. Lihat components/ui/shiny-text.tsx untuk alasan
+   pemilihan nilainya. */
+.shiny {
+  background-image: linear-gradient(
+    var(--shiny-sudut, 100deg),
+    var(--shiny-dasar, #64cefb) 35%,
+    var(--shiny-kilau, #ffffff) 50%,
+    var(--shiny-dasar, #64cefb) 65%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* Sebagian mesin render butuh ini untuk membuat isian hurufnya benar-benar
+     tembus pandang, bukan sekadar berwarna transparan. */
+  -webkit-text-fill-color: transparent;
+  animation: shiny-sapu var(--shiny-lama, 3s) linear infinite;
+}
+
+@keyframes shiny-sapu {
+  from { background-position: 100% 0%; }
+  to { background-position: 0% 0%; }
+}
+
+/* Sapuan tanpa henti di elemen terbesar halaman adalah gerakan yang paling
+   sulit diabaikan. Yang dimatikan hanya sapuannya; gradiennya tetap ada sebagai
+   warna, jadi tampilannya tidak berubah — hanya diam. */
+@media (prefers-reduced-motion: reduce) {
+  .shiny {
+    animation: none;
+    background-position: 50% 0%;
+  }
+}
+
+/* ==========================================================================
+   Layar sentuh dan layar sempit
+   ==========================================================================
+
+   Pembesaran targetnya digantung pada `pointer: coarse`, BUKAN pada lebar
+   layar. Yang menentukan seberapa besar sebuah tombol harus dibuat adalah alat
+   yang menekannya — ujung jari, bukan jumlah piksel. Jendela desktop yang
+   dikecilkan tidak butuh tombol raksasa, sementara tablet selebar 1024px
+   membutuhkannya.
+   ========================================================================== */
+@media (pointer: coarse) {
+  /* 15px + 14px teks + 15px = 44px, tepat di ambang. */
+  .navpil-item,
+  .navpil-aksi {
+    padding-top: 15px;
+    padding-bottom: 15px;
+  }
+
+  /* Padding di TOMBOL pembungkusnya, bukan pada alurnya. Alur 64x32 itu punya
+     perhitungan posisi knob yang terikat pada ukurannya; membesarkannya berarti
+     menghitung ulang semuanya. Padding memperbesar area sentuh tanpa menyentuh
+     satu pun angka itu. */
+    .profil-pemicu {
+    min-height: 44px;
+    padding-right: 10px;
+  }
+
+  .brand {
+    min-height: 44px;
+  }
+
+  .masuk-ganti,
+  .masuk-kembali,
+  .profil-item {
+    min-height: 44px;
+  }
+
+  /* Tinggi dicapai lewat `min-height` saja, bukan padding tambahan. `all:
+     unset` membuat tab ini mewarisi line-height 1.55 dari body, jadi padding
+     15px di atas dan bawah menghasilkan 74px — jauh lebih gemuk daripada yang
+     dibutuhkan. `inline-flex` yang memusatkan teksnya di dalam 44px itu. */
+  .masuk-mode-tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* Tombol kirim bulat di dalam kolom setinggi 58px. 44px masih menyisakan 7px
+     di atas dan di bawahnya, jadi ia tetap terlihat mengambang di dalam pil —
+     bukan mengisinya sampai mepet. */
+  .masuk-kirim {
+    width: 44px;
+    height: 44px;
+    right: 7px;
+  }
+
+  /* Radio-nya sendiri 13x16px dan tidak bisa dibesarkan tanpa merusak
+     tampilannya. Yang dibesarkan LABEL-nya: mengklik teks sudah mengaktifkan
+     radionya, jadi labelnyalah target sentuh yang sebenarnya — ia hanya perlu
+     setinggi jari. */
+  label:has(> input[type="radio"]) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .profil-item {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Isi hero mengalir dari atas, tidak didorong ke dasar.
+
+     Di layar lebar, `margin-top: auto` menempelkan judul ke bawah dan itu
+     terbaca sebagai komposisi. Di ponsel, navbar memakan 166px dan isinya
+     hanya 355px — sisanya menganga 208px di antara keterangan dan judul, dan
+     lubang sebesar itu terbaca sebagai kesalahan muat, bukan rancangan.
+
+     Ruang yang tersisa TIDAK jadi kosong: video menutupi seluruh layar di
+     belakangnya, jadi bagian bawah tetap terisi gambar. */
+  .hero-tengah {
+    margin-top: 0;
+  }
+
+  .hero-isi {
+    gap: clamp(28px, 5vh, 44px);
+  }
+
+  /* Menu profil selebar layar dikurangi jarak tepi, bukan 224px tetap. Panel
+     berlebar tetap yang lebih besar dari sisa ruang akan menggantung keluar
+     layar di ponsel sempit. */
+  .profil-panel {
+    width: min(224px, calc(100vw - 32px));
+  }
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+  /* Tablet: navbar masih sebaris, tapi tanpa ruang lega. Jarak antar kolomnya
+     dirapatkan supaya nav pil tidak terhimpit slider dan menu profil. */
+  .nav {
+    gap: var(--sp-3);
+  }
+}
+
+/* ==========================================================================
+   Halaman About
+   Susunannya mengikuti halaman Manifest PlaceRadar: judul berpil bergaris,
+   pernyataan besar, lalu bagian-bagian di bawahnya. Warnanya memakai token
+   sendiri supaya ia tetap milik Shortsmith, bukan tempelan dari project lain.
+   ========================================================================== */
+.tentang {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--sp-7);
+}
+
+.tentang-kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-7);
+}
+
+.tentang-pil-baris {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/* Pil bergaris, bukan berisi. Ia meminjam bentuk dari nav pil dan tombol di
+   aplikasi ini, tapi kosong di dalamnya — jadi ia terbaca sebagai tipografi,
+   bukan sebagai sesuatu yang bisa ditekan. */
+.tentang-pil {
+  display: inline-block;
+  padding: 0.16em 0.6em;
+  border: 2px solid var(--line-2);
+  border-radius: var(--r-full);
+  font-size: clamp(1.6rem, 5vw, 3.4rem);
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.tentang-amp {
+  font-size: clamp(1.6rem, 5vw, 3.4rem);
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.tentang-judul {
+  font-size: clamp(1.4rem, 4.4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  /* Sama seperti judul dashboard: kotak latarnya dilebarkan supaya huruf yang
+     menjulang tidak terpotong oleh background-clip. */
+  padding: 0.08em 0;
+}
+
+.tentang-blok {
+  max-width: 60ch;
+  margin-bottom: var(--sp-7);
+}
+
+.tentang-blok-kanan {
+  align-self: flex-end;
+  text-align: right;
+}
+
+.tentang-pernyataan {
+  font-size: clamp(1.35rem, 3.6vw, 2.1rem);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin-bottom: var(--sp-4);
+}
+
+.tentang-pernyataan em {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.tentang-dukungan {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--ink-3);
+  max-width: 46ch;
+}
+
+.tentang-blok-kanan .tentang-dukungan {
+  margin-left: auto;
+}
+
+.tentang-angka {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+  padding: var(--sp-5) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-7);
+}
+
+.tentang-angka div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tentang-angka strong {
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.tentang-angka span {
+  font-size: 0.76rem;
+  color: var(--ink-4);
+}
+
+.tentang-sub {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: var(--sp-5);
+}
+
+.tentang-langkah {
+  list-style: none;
+  margin: 0 0 var(--sp-7);
+  padding: 0;
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.tentang-langkah li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.tentang-nomor {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  padding-top: 2px;
+}
+
+.tentang-langkah h3,
+.tentang-jujur h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.tentang-langkah p,
+.tentang-jujur p {
+  font-size: 0.86rem;
+  line-height: 1.65;
+  color: var(--ink-3);
+}
+
+.tentang-jujur {
+  list-style: none;
+  margin: 0 0 var(--sp-7);
+  padding: 0;
+  display: grid;
+  gap: var(--sp-4);
+}
+
+/* Dibedakan dari daftar langkah dengan garis di tepi kiri, bukan dengan warna
+   peringatan. Ini keterangan, bukan kesalahan — memerahkannya akan membuat
+   pembacanya mengira ada yang rusak. */
+.tentang-jujur li {
+  padding-left: var(--sp-5);
+  border-left: 2px solid var(--line-2);
+}
+
+@media (max-width: 640px) {
+  .tentang-angka {
+    grid-template-columns: 1fr;
+    gap: var(--sp-5);
+  }
+  .tentang-blok-kanan {
+    align-self: stretch;
+    text-align: left;
+  }
+  .tentang-blok-kanan .tentang-dukungan {
+    margin-left: 0;
+  }
+  .tentang-langkah li {
+    grid-template-columns: 1fr;
+    gap: var(--sp-2);
+  }
+}
+
+/* ==========================================================================
+   Pustaka konsep — grid kartu
+   ========================================================================== */
+.konsep-grid {
+  display: grid;
+  /* `auto-fill` dengan lebar minimum, bukan jumlah kolom tetap per breakpoint.
+     Jumlah kolomnya jadi urusan browser: satu di ponsel, tiga di layar lebar,
+     dan apa pun yang muat di antaranya — tanpa satu pun media query. */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--sp-4);
+}
+
+.konsep-kartu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  transition: border-color var(--t), background var(--t), transform var(--t);
+}
+
+.konsep-kartu:hover {
+  border-color: var(--line-2);
+  background: var(--surface-2);
+  transform: translateY(-2px);
+}
+
+/* Kartu ikut menyala saat tautannya mendapat fokus keyboard. Tanpa ini,
+   pengguna Tab hanya melihat cincin fokus di teks judul dan tidak tahu bahwa
+   seluruh kartu itulah targetnya. */
+.konsep-kartu:has(.konsep-tautan:focus-visible) {
+  border-color: var(--focus);
+}
+
+.konsep-ikon {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.konsep-nama {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.konsep-tautan {
+  color: inherit;
+}
+
+.konsep-tautan:focus-visible {
+  outline: none;
+}
+
+/* Merentang menutupi seluruh kartu. Inilah yang membuat kartu bisa ditekan di
+   mana saja tanpa membungkus tombol Hapus di dalam sebuah <a>. */
+.konsep-tautan::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.konsep-desc {
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--ink-3);
+  /* Kartu bersebelahan tetap sama tinggi meski keterangannya beda panjang. */
+  flex: 1;
+}
+
+.konsep-kaki {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.konsep-label {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Naik di atas lapisan tautan yang merentang, kalau tidak ia tidak bisa ditekan
+   sama sekali.
+
+   `position` dan `z-index` ditulis SESUDAH `all: unset`, bukan sebelumnya.
+   Deklarasi di dalam satu aturan berlaku menurut urutan tulis, jadi `all:
+   unset` yang datang belakangan mengembalikan posisinya ke `static` — dan
+   tombolnya kembali tertutup tautan. Sudah terbukti: klik di atas tombol Hapus
+   mendarat di `a.konsep-tautan`, bukan di tombolnya. */
+.konsep-hapus {
+  all: unset;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding: 7px 14px;
+  border-radius: var(--r-full);
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--ink-4);
+  border: 1px solid transparent;
+  transition: color var(--t), background var(--t), border-color var(--t);
+}
+
+.konsep-hapus:hover:not(:disabled) {
+  color: var(--err);
+  background: var(--err-bg);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.konsep-hapus:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.konsep-hapus:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (pointer: coarse) {
+  .konsep-hapus {
+    min-height: 44px;
+  }
+}

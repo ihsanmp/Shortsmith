@@ -1,0 +1,31 @@
+{
+  "nama": "vlog-cepat-v1",
+  "versi": 1,
+  "metrik": {
+    "durasi_total": { "mean": 42.3, "std": 5.1 },
+    "avg_shot_length": { "mean": 1.8, "std": 0.6 },
+    "jumlah_cut": { "mean": 23, "std": 4 },
+    "hook_duration": { "mean": 3.2, "std": 0.4 }
+  },
+  "aspect_ratio": "9:16",
+  "caption": {
+    "ada": true,
+    "posisi": "tengah-bawah",
+    "gaya": "frasa",
+    "font": "Arial",
+    "ukuran": 64,
+    "warna": "&H00FFFFFF",
+    "outline_warna": "&H00000000",
+    "outline": 3,
+    "max_kata": 4
+  },
+  "struktur": ["hook", "konteks", "isi", "cta"],
+  "gaya_bahasa": "santai, kalimat pendek, banyak pertanyaan retoris",
+  "manual": {
+    "brand_voice": "ngobrol seperti teman, tanpa jargon",
+    "cta": "ajak nonton video panjangnya di channel",
+    "larangan": [],
+    "target_audiens": "mahasiswa dan fresh graduate"
+  },
+  "music_path": null
+}

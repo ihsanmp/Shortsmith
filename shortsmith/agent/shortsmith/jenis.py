@@ -22,6 +22,20 @@ yang tidak berasal dari bahan mana pun, lalu menyajikannya seolah hasil analisis
 Konsekuensinya jujur: memilih "AMV" tidak membuat potongannya mengikuti ketukan
 lagu. Untuk itu dibutuhkan deteksi ketukan dan penjadwalan potongan terhadapnya —
 pekerjaan tersendiri yang belum ada di pipeline ini.
+
+## Apa yang diukur dari dua contoh AMV yang dikirim pengguna
+
+    kuroshin031     1024x576 (16:9)   34 potongan / 16,2s   shot median 0,32s
+    hatsune_arima0   576x746 (3:4)    39 potongan / 19,3s   shot median 0,33s
+
+Dua hal yang konsisten: panjang shot ~0,33 detik, dan laju ~2 potongan per
+detik. Satu hal yang TIDAK konsisten: rasio — makanya jenis ini tidak lagi
+memaksanya.
+
+Panjang shot itu sendiri sengaja tidak diatur di sini. Ia justru hal yang paling
+tepat diukur lewat konsep: buat konsep dari video AMV contoh, dan
+`avg_shot_length` akan terisi ~0,33 detik dari bahan yang sebenarnya — bukan dari
+angka yang diketik di file ini.
 """
 
 from __future__ import annotations
@@ -40,10 +54,15 @@ log = logging.getLogger(__name__)
 GAIN_LATAR = -20.0
 GAIN_UTAMA = -3.0
 
+# `rasio: None` berarti JANGAN ditimpa — pakai apa pun yang ditetapkan konsep.
+#
+# AMV sempat dipaksa 16:9 di sini. Itu keliru, dan terbantah oleh contoh yang
+# dikirim pengguna: dari dua AMV, satu 1024x576 (16:9) dan satu 576x746
+# (potret 3:4). Rasio bukan ciri AMV — ia mengikuti ke mana videonya diunggah.
 ATURAN: dict[str, dict] = {
     "short": {"rasio": "9:16", "subtitle": True, "gain_db": GAIN_LATAR},
     "cinematic": {"rasio": "16:9", "subtitle": False, "gain_db": GAIN_LATAR},
-    "amv": {"rasio": "16:9", "subtitle": False, "gain_db": GAIN_UTAMA},
+    "amv": {"rasio": None, "subtitle": False, "gain_db": GAIN_UTAMA},
 }
 
 
@@ -68,14 +87,15 @@ def terapkan_jenis(profile: ConceptProfile, jenis: str) -> ConceptProfile:
 
     # `aspect_ratio` disimpan sebagai string di profil, dan diterjemahkan jadi
     # piksel oleh `resolution_for()` saat EDL dibangun — jadi cukup stringnya
-    # yang diganti di sini.
-    p.aspect_ratio = aturan["rasio"]
+    # yang diganti di sini. `None` berarti biarkan apa adanya.
+    if aturan["rasio"] is not None:
+        p.aspect_ratio = aturan["rasio"]
     p.caption.ada = bool(aturan["subtitle"])
 
     log.info(
-        "jenis '%s': %s, subtitle %s, lagu %.0f dB",
+        "jenis '%s': rasio %s, subtitle %s, lagu %.0f dB",
         jenis,
-        aturan["rasio"],
+        aturan["rasio"] or f"{p.aspect_ratio} (dari konsep)",
         "ya" if aturan["subtitle"] else "tidak",
         aturan["gain_db"],
     )

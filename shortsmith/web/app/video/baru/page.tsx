@@ -37,9 +37,9 @@ const JENIS = [
   {
     id: "amv",
     nama: "AMV anime",
-    ringkas: "Gambar mengikuti lagu",
+    ringkas: "Potongan cepat mengikuti lagu",
     isi: "Rangkaian klip yang mengikuti lagu, bukan ucapan. Lagunya jadi jalur utama — bukan latar — jadi ia wajib diisi.",
-    detail: ["16:9 · 1920×1080", "Tanpa subtitle", "Lagu WAJIB, keras"],
+    detail: ["Rasio dari konsep", "Tanpa subtitle", "Lagu WAJIB, keras"],
   },
 ] as const;
 
@@ -76,8 +76,10 @@ export default function PilihJenis() {
           cara agent memutuskan potongan mana yang dipakai. */}
       <p className="jenis-catatan">
         Ketiganya memakai mesin editing yang sama. Yang membedakan adalah rasio,
-        panjang target, dan subtitle — sedangkan gaya potongannya tetap datang
-        dari konsep yang kamu pilih di langkah berikutnya.
+        subtitle, dan kekerasan lagu — sedangkan <strong>ritme potongannya
+        datang dari konsep</strong>, yang diukur dari video contoh. Untuk AMV
+        itu berarti: buat konsep dari beberapa AMV yang kamu suka, dan panjang
+        shot-nya akan terukur dari sana.
       </p>
     </section>
   );

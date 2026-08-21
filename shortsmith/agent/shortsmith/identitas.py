@@ -94,6 +94,28 @@ _DAFTAR: tuple[Identitas, ...] = (
         pakai_llm=False,
     ),
     Identitas(
+        nama="penilai",
+        model=SONNET,
+        tugas=(
+            "Melihat klip hasil generate dan memutuskan apakah ia pantas "
+            "berdiri di antara bahan asli. Bukan klasifikasi sepele: "
+            "keputusannya menyuruh pengguna membuat ulang klip, dan menolak "
+            "klip yang sebenarnya sudah pas sama merugikannya dengan "
+            "meloloskan yang tidak pas."
+        ),
+    ),
+    Identitas(
+        nama="pemasok",
+        model=SONNET,
+        tugas=(
+            "Menulis prompt B-roll untuk Veo saat pustaka bahan tidak cukup. "
+            "Bukan keputusan editorial — potongan mana yang dipakai tetap "
+            "diputuskan penata dari klip yang sudah ada. Tugasnya menerjemahkan "
+            "kekurangan yang terukur menjadi deskripsi gambar yang bisa dibuat, "
+            "dan itu jauh lebih terkekang daripada memilih hook."
+        ),
+    ),
+    Identitas(
         nama="kurir",
         model="",
         tugas=(

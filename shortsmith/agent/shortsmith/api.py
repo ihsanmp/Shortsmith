@@ -59,6 +59,39 @@ class ApiClient:
         res.raise_for_status()
         return res.json().get("job")
 
+    def next_tugas(self, timeout: int = 30) -> dict[str, Any] | None:
+        """Ambil satu tugas singkat (menulis prompt / memeriksa klip).
+
+        Terpisah dari `next_job` karena antreannya memang tabel yang berbeda;
+        alasannya ada di komentar tabel `tugas` di web/db/schema.ts.
+        """
+        res = self.session.get(f"{self.base_url}/api/tugas/next", timeout=timeout)
+        if res.status_code == 401:
+            raise ApiError("X-Agent-Key ditolak server. Periksa AGENT_KEY di kedua sisi.")
+        # 404 berarti server belum memasang jalur ini. Itu BUKAN alasan untuk
+        # menghentikan daemon: job render tetap harus jalan, dan daemon yang
+        # lebih baru tidak boleh menuntut server yang sudah diperbarui.
+        if res.status_code == 404:
+            return None
+        res.raise_for_status()
+        return res.json().get("tugas")
+
+    def lapor_tugas(
+        self, tugas_id: str, *, hasil: Any = None, error: str = ""
+    ) -> bool:
+        muatan = {"error": error} if error else {"hasil": hasil}
+        res = self.session.post(
+            f"{self.base_url}/api/tugas/{tugas_id}/hasil", json=muatan, timeout=30
+        )
+        if res.status_code == 409:
+            # Tugasnya sudah dibebaskan karena dianggap basi, lalu diambil pihak
+            # lain. Melaporkan hasil ke situ akan menimpa pekerjaan yang lebih
+            # baru, jadi laporan ini memang harus dibuang.
+            log.warning("tugas %s sudah tidak dikerjakan kita — laporan dibuang", tugas_id)
+            return False
+        res.raise_for_status()
+        return True
+
     def heartbeat(self, job_id: str, *, progress: int | None = None, tahap: str = "") -> bool:
         """Kembalikan False kalau job sudah bukan milik kita lagi."""
         payload: dict[str, Any] = {}

@@ -141,6 +141,24 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print("  [X] ANTHROPIC_API_KEY kosong")
             masalah.append("ANTHROPIC_API_KEY belum diset")
 
+    # Veo bersifat pilihan, jadi tidak adanya kunci BUKAN masalah - cuma
+    # keterangan. Menjadikannya masalah akan membuat `doctor` gagal pada semua
+    # pemasangan yang memang tidak berniat memakai Veo sama sekali.
+    print("\n== Veo (pilihan) ==")
+    import os as _os
+
+    _kunci = _os.environ.get("GEMINI_API_KEY", "").strip()
+    if _kunci:
+        from .veo import MODEL as _veo_model
+
+        # Panjangnya saja, bukan isinya. Cukup untuk memastikan yang terbaca
+        # memang kunci dan bukan string kosong atau tanda kutip yang ikut
+        # tersalin, tanpa menaruh kredensial ke dalam log.
+        print(f"  [v] GEMINI_API_KEY terpasang ({len(_kunci)} karakter)")
+        print(f"      model: {_veo_model}")
+    else:
+        print("  [-] GEMINI_API_KEY kosong - perintah `pasok` tidak bisa dipakai")
+
     print("\n== Renderer ==")
     print(f"  aktif: {SETTINGS.renderer}")
     if SETTINGS.renderer == "resolve":
@@ -233,6 +251,92 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pasok(args: argparse.Namespace) -> int:
+    """Buat klip B-roll baru lewat Claude + Veo."""
+    from .config import SETTINGS
+    from .pemasok import FOLDER, PemasokError, pasok, tulis_saja
+
+    # Berhenti sebelum bagian yang berbayar. Dipakai kalau klipnya akan dibuat
+    # sendiri di Google Flow atau aplikasi Gemini, yang ditanggung langganan
+    # konsumen - jalur yang TIDAK bisa dicapai lewat API.
+    if args.prompt_saja:
+        try:
+            prompts = tulis_saja(
+                args.jumlah, jenis=args.jenis, tema=args.tema or "",
+                durasi=args.durasi,
+            )
+        except PemasokError as exc:
+            print(f"Gagal: {exc}")
+            return 1
+        tujuan = SETTINGS.bahan_dir / FOLDER.get(args.jenis, "B-roll")
+        print(f"\n{len(prompts)} prompt - tempel satu per satu ke Flow:\n")
+        for i, x in enumerate(prompts, 1):
+            print(f"[{i}] {x}\n")
+
+        # Menjaga unduhan langsung dari sini, bukan sebagai perintah kedua.
+        #
+        # Kalau dipisah, pengguna harus membuka terminal lain dan menjalankan
+        # `pantau` SEBELUM mengunduh - karena berkas yang sudah ada saat
+        # pemantauan dimulai sengaja diabaikan. Urutan yang salah berarti klip
+        # pertamanya tidak pernah terangkut, dan tidak ada pesan apa pun yang
+        # menjelaskan kenapa.
+        if not args.pantau:
+            print(f"Simpan hasilnya sebagai mp4 di: {tujuan}")
+            return 0
+
+        from .pantau import pantau as jaga
+
+        unduhan = Path(args.dari) if args.dari else Path.home() / "Downloads"
+        print(f"Menjaga {unduhan} - unduh saja hasilnya, sisanya otomatis.")
+        print(f"Tujuan: {tujuan}   (Ctrl-C untuk berhenti)\n")
+        try:
+            masuk = jaga(unduhan, tujuan, batas=len(prompts))
+        except NotADirectoryError as exc:
+            print(f"Gagal: {exc}")
+            return 1
+        print(f"\n{len(masuk)} klip masuk ke {tujuan}")
+        return 0 if masuk else 1
+
+    try:
+        berkas = pasok(
+            args.jumlah,
+            jenis=args.jenis,
+            tema=args.tema or "",
+            rasio=args.rasio,
+            durasi=args.durasi,
+            resolusi=args.resolusi,
+            bahan_dir=SETTINGS.bahan_dir,
+        )
+    except PemasokError as exc:
+        print(f"Gagal: {exc}")
+        return 1
+
+    if not berkas:
+        print("Tidak ada klip yang jadi.")
+        return 1
+    print(f"\n{len(berkas)} klip dibuat:")
+    for b in berkas:
+        print(f"  {b}  ({b.stat().st_size / 1e6:.1f} MB)")
+    return 0
+
+
+def cmd_pantau(args: argparse.Namespace) -> int:
+    """Jaga folder unduhan, pindahkan klip baru ke folder bahan."""
+    from .config import SETTINGS
+    from .pantau import pantau
+    from .pemasok import FOLDER
+
+    sumber = Path(args.dari) if args.dari else Path.home() / "Downloads"
+    tujuan = SETTINGS.bahan_dir / FOLDER.get(args.jenis, "B-roll")
+    try:
+        masuk = pantau(sumber, tujuan, batas=args.batas)
+    except NotADirectoryError as exc:
+        print(f"Gagal: {exc}")
+        return 1
+    print(f"\n{len(masuk)} klip masuk ke {tujuan}")
+    return 0 if masuk else 1
+
+
 # --------------------------------------------------------------------------
 
 
@@ -272,6 +376,43 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--api-url", default=None, help="default: env SHORTSMITH_API_URL")
     pd.add_argument("--agent-key", default=None, help="default: env AGENT_KEY")
     pd.set_defaults(func=cmd_daemon)
+
+    pp = sub.add_parser(
+        "pasok",
+        help="Buat klip B-roll baru lewat Claude + Veo (BERBAYAR, ke akun Google-mu)",
+    )
+    pp.add_argument("jumlah", type=int, help="Berapa klip dibuat")
+    pp.add_argument("--jenis", default="cinematic",
+                    choices=["short", "cinematic", "amv", "podcast"],
+                    help="Menentukan gaya prompt dan folder tujuannya di bahan/")
+    pp.add_argument("--tema", default="", help="Tema videonya, supaya klipnya nyambung")
+    pp.add_argument("--rasio", default="16:9",
+                    help="Rasio apa pun; dipetakan ke 16:9 atau 9:16 yang diterima Veo")
+    pp.add_argument("--durasi", type=float, default=8,
+                    help="Detik per klip; dibulatkan ke 4, 6, atau 8")
+    pp.add_argument("--resolusi", default="720p", choices=["720p", "1080p"])
+    pp.add_argument("--pantau", action="store_true",
+                    help="Setelah mencetak prompt, langsung jaga folder unduhan "
+                         "sampai semua klipnya masuk. Hanya dengan --prompt-saja.")
+    pp.add_argument("--dari", default="",
+                    help="Folder unduhan yang dijaga (bawaan: folder Downloads-mu)")
+    pp.add_argument("--prompt-saja", action="store_true",
+                    help="Cetak promptnya saja, JANGAN panggil Veo. Gratis - untuk "
+                         "dibuat sendiri di Google Flow dengan langganan Gemini.")
+    pp.set_defaults(func=cmd_pasok)
+
+    pn = sub.add_parser(
+        "pantau",
+        help="Jaga folder unduhan; klip baru otomatis masuk ke folder bahan",
+    )
+    pn.add_argument("--jenis", default="cinematic",
+                    choices=["short", "cinematic", "amv", "podcast"],
+                    help="Folder bahan tujuannya")
+    pn.add_argument("--dari", default="",
+                    help="Folder yang dijaga (bawaan: folder Downloads-mu)")
+    pn.add_argument("--batas", type=int, default=0,
+                    help="Berhenti sendiri setelah sekian klip masuk (0 = terus)")
+    pn.set_defaults(func=cmd_pantau)
 
     pa = sub.add_parser("analyze", help="Analisis saja, tanpa render")
     pa.add_argument("source")

@@ -269,6 +269,12 @@ class CutPlan(BaseModel):
 
 class Cut(PlannedCut):
     src: str = Field(description="Path file sumber")
+    # Filter perataan eksposur, diisi oleh shortsmith.warna setelah EDL jadi.
+    # Kosong berarti potongan ini tidak perlu dikoreksi. Disimpan DI DALAM EDL,
+    # bukan dihitung ulang saat render, supaya hasilnya bisa dibaca dan
+    # diperiksa dari edl.json seperti keputusan potongan lainnya.
+    warna: str = ""
+
     # Lihat VideoSlot.crop dan VideoSlot.fokus_x — alasannya sama persis.
     crop: str = ""
     fokus_x: float | None = None
@@ -396,6 +402,11 @@ class VideoSlot(BaseModel):
     durasi: float = Field(gt=0, description="Berapa lama slot ini tampil")
     src: str = Field(description="File klip B-roll")
     in_: float = Field(default=0.0, alias="in", ge=0, description="Detik mulai di dalam klip")
+    # Filter perataan eksposur, diisi oleh shortsmith.warna setelah EDL jadi.
+    # Kosong berarti potongan ini tidak perlu dikoreksi. Disimpan DI DALAM EDL,
+    # bukan dihitung ulang saat render, supaya hasilnya bisa dibaca dan
+    # diperiksa dari edl.json seperti keputusan potongan lainnya.
+    warna: str = ""
     # Bilah hitam yang terbakar di berkas sumber, dibuang sebelum crop rasio.
     # Tanpa ini, memotong ke 9:16 akan MEMBAWA SERTA bilahnya.
     crop: str = ""

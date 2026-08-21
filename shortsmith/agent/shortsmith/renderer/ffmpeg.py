@@ -58,11 +58,17 @@ def _vf_chain(cut: Cut, width: int, height: int, fps: int) -> str:
 
     from .overlay import posisi_crop
 
+    # Perataan eksposur DI SINI, setelah scale: filternya bekerja per piksel,
+    # jadi menjalankannya pada gambar yang sudah diperkecil ke ukuran keluaran
+    # jauh lebih murah daripada pada frame sumber 4K, dengan hasil yang sama.
+    ratakan = f"{cut.warna}," if cut.warna else ""
+
     return (
         f"{buang_bilah}"
         f"crop='{crop_w}':'{crop_h}'{posisi_crop(cut.fokus_x, cut.fokus_y, cut.arah, cut.jalur)},"
         f"scale={width}:{height}:flags=lanczos,"
         f"setsar=1,"
+        f"{ratakan}"
         f"fps={fps},"
         f"format=yuv420p"
     )

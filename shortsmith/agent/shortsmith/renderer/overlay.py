@@ -115,11 +115,15 @@ def _vf_slot(slot: VideoSlot, width: int, height: int, fps: int) -> str:
     # ikut sampai ke hasil akhir meski rasionya sudah 9:16.
     buang_bilah = f"crop={slot.crop}," if slot.crop else ""
 
+    # Lihat _vf_chain di ffmpeg.py — alasan penempatannya sama persis.
+    ratakan = f"{slot.warna}," if slot.warna else ""
+
     return (
         f"{buang_bilah}"
         f"crop='{crop_w}':'{crop_h}'{posisi_crop(slot.fokus_x, slot.fokus_y, slot.arah, slot.jalur)},"
         f"scale={width}:{height}:flags=lanczos,"
         f"setsar=1,"
+        f"{ratakan}"
         f"fps={fps},"
         f"format=yuv420p"
     )

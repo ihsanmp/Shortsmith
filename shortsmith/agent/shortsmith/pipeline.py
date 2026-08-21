@@ -65,6 +65,7 @@ def build_edl(
     *,
     concept_id: str,
     music: str | None = None,
+    music_gain_db: float = -20.0,
 ) -> EDL:
     """Ubah rencana potongan menjadi EDL lengkap yang siap dirender."""
     # Tiap potongan membawa nomor video sumbernya; di sinilah nomor itu
@@ -103,13 +104,21 @@ def build_edl(
     kata_per_sumber = {i: v.words for i, v in enumerate(vmap.videos)}
     captions = derive_captions(cuts, kata_per_sumber, profile.caption)
 
-    # Musik SELALU dilewati: user menambahkannya sendiri saat mengedit hasil.
-    # Jalurnya tidak dihapus dari EDL maupun renderer — hanya tidak pernah diisi
-    # di sini. Menghapusnya berarti membongkar filter_complex ffmpeg yang sudah
-    # terbukti, demi menghilangkan cabang yang tidak menyakiti siapa pun.
+    # Musik dipasang kalau diberikan.
+    #
+    # Sebelumnya jalur ini SELALU dilewati — keputusan lama ketika lagu memang
+    # ditambahkan sendiri oleh pengguna setelah render. Sekarang lagu bisa
+    # dipilih di form, dan untuk AMV ia bahkan jalur utamanya, jadi melewatinya
+    # berarti mengabaikan berkas yang sengaja dikirim.
+    #
+    # Kekerasannya datang dari jenis video, bukan angka tetap: latar yang pelan
+    # (-20 dB) tidak boleh menutupi ucapan, sedangkan AMV tidak punya ucapan
+    # yang perlu dilindungi.
     music_obj = None
-    if music or profile.music_path:
-        log.info("musik diabaikan sesuai setelan — ditambahkan manual setelah render")
+    sumber_musik = music or profile.music_path
+    if sumber_musik:
+        music_obj = Music(src=str(sumber_musik), gain_db=music_gain_db)
+        log.info("musik: %s @ %.0f dB", Path(sumber_musik).name, music_gain_db)
 
     # Rasio keluaran mengikuti konsep, bukan angka tetap di config. Konsep
     # "clipper 3:4" dan "vlog 9:16" bisa hidup berdampingan tanpa saling
@@ -138,6 +147,7 @@ def run(
     brief: str = "",
     job_id: str | None = None,
     music: str | None = None,
+    music_gain_db: float = -20.0,
     renderer_name: str | None = None,
     refresh: bool = False,
     dry_run: bool = False,
@@ -289,7 +299,12 @@ def run(
             log.info("      %2d. t=%6.2f (%4.1fs) <- %s @ %.2f",
                      i, s.t, s.durasi, Path(s.src).name, s.in_)
     else:
-        edl = build_edl(plan, vmap, profile, concept_id=profile.nama, music=music)
+        edl = build_edl(
+            plan, vmap, profile,
+            concept_id=profile.nama,
+            music=music,
+            music_gain_db=music_gain_db,
+        )
         for i, c in enumerate(edl.cuts, 1):
             log.info("      %2d. [%-8s] vid%d %6.2f-%6.2f (%4.1fs)  %s",
                      i, c.role.value, c.sumber, c.in_, c.out, c.durasi, c.alasan)

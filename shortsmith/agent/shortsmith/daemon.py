@@ -25,6 +25,7 @@ from typing import Any
 
 from .api import ApiClient, ApiError
 from .config import SETTINGS
+from .jenis import gain_musik, terapkan_jenis
 from .models import CaptionStyle, ConceptProfile, ManualFields
 from .probe import probe
 
@@ -209,6 +210,25 @@ class Daemon:
             sources.append(self._unduh(item, work))
 
         profile = _profile_from_json(job.get("profileJson"), job.get("judul") or "konsep")
+
+        # Jenis video menimpa beberapa setelan konsep.
+        #
+        # Yang ditimpa hanya yang memang bisa ditimpa tanpa mengarang: rasio,
+        # dan apakah subtitle dibakar. Gaya potongannya sendiri TIDAK diubah —
+        # itu tetap milik konsep, dan menebaknya dari satu label jenis akan
+        # menghasilkan editing yang tidak pernah diukur dari contoh mana pun.
+        jenis = job.get("jenis") or "short"
+        profile = terapkan_jenis(profile, jenis)
+
+        # Lagu, kalau ada. Diunduh dengan aturan yang sama seperti bahan mentah:
+        # berkas lokal dipakai di tempatnya, tanpa disalin.
+        musik = None
+        item_musik = job.get("musik")
+        if item_musik:
+            hb.update(14, "menyiapkan lagu")
+            musik = str(self._unduh(item_musik, work))
+            log.info("lagu: %s", Path(musik).name)
+
         output = work / "output.mp4"
 
         def progress(persen: int, tahap: str) -> None:
@@ -220,6 +240,8 @@ class Daemon:
             output,
             brief=job.get("brief", ""),
             job_id=job["id"],
+            music=musik,
+            music_gain_db=gain_musik(jenis),
             on_progress=progress,
         )
         if hasil is None:

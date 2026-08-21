@@ -23,6 +23,15 @@ export const jobType = pgEnum("job_type", ["render", "profile_extraction"]);
 export const assetKind = pgEnum("asset_kind", ["raw", "sample", "output", "music"]);
 
 /**
+ * Jenis video yang dituju.
+ *
+ * Ini BUKAN label. Tiap jenis memilih rasio, durasi target, dan apakah subtitle
+ * dibakar — tiga hal yang memang sudah bisa dikendalikan pipeline. Yang belum
+ * dikendalikannya adalah gaya potongannya sendiri; itu tetap datang dari konsep.
+ */
+export const videoJenis = pgEnum("video_jenis", ["short", "cinematic", "amv"]);
+
+/**
  * Akun pengguna.
  *
  * Pendaftaran dijaga kata sandi undangan (`APP_PASSWORD`), jadi tabel ini hanya
@@ -104,6 +113,7 @@ export const projects = pgTable(
       .notNull()
       .references(() => conceptProfiles.id, { onDelete: "restrict" }),
     brief: text("brief").notNull().default(""),
+    jenis: videoJenis("jenis").notNull().default("short"),
     status: jobStatus("status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

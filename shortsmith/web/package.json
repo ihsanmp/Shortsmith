@@ -25,7 +25,8 @@
     "db:migrasi-folder": "tsx scripts/migrasi-folder.ts",
     "db:folder": "tsx scripts/cek-folder.ts",
     "db:migrasi-users": "tsx scripts/migrasi-users.ts",
-    "db:migrasi-profil": "tsx scripts/migrasi-profil.ts"
+    "db:migrasi-profil": "tsx scripts/migrasi-profil.ts",
+    "db:migrasi-jenis": "tsx scripts/migrasi-jenis.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.717.0",

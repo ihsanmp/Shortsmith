@@ -10,6 +10,33 @@ import { Dropdown } from "@/components/ui/dropdown";
 
 type Concept = { id: string; nama: string; siap: boolean; isDefault: boolean };
 type Sumber = "pustaka" | "unggah";
+type JenisVideo = "short" | "cinematic" | "amv";
+
+/** Nama yang ditampilkan per jenis, plus apakah lagunya wajib. */
+const NAMA_JENIS: Record<
+  JenisVideo,
+  { badge: string; judul: string; sub: string; laguWajib: boolean }
+> = {
+  short: {
+    badge: "Short baru",
+    judul: "Unggah rekaman",
+    sub: "Tegak 9:16, subtitle menempel. Tentukan gayanya, sisanya otomatis.",
+    laguWajib: false,
+  },
+  cinematic: {
+    badge: "Cinematic baru",
+    judul: "Unggah rekaman",
+    sub: "Lanskap 16:9 tanpa subtitle, potongan lebih bernapas.",
+    laguWajib: false,
+  },
+  amv: {
+    badge: "AMV baru",
+    judul: "Unggah klip",
+    sub: "Gambar mengikuti lagu. Lagunya jalur utama, jadi ia wajib diisi.",
+    laguWajib: true,
+  },
+};
+
 type AsalBahan = "unggah" | "lokal";
 type BerkasBahan = { nama: string; ukuranBytes: number };
 /** Berkas beserta folder asalnya — dipilih sebagai satu kesatuan. */
@@ -68,6 +95,12 @@ export default function NewProjectPage() {
   // tetap dipakai — browser memberi nama dan ukuran, dan itu sudah cukup;
   // path absolutnya memang tidak boleh dibaca halaman web.
   const [asal, setAsal] = useState<AsalBahan>("unggah");
+  // Jenis datang dari halaman pemilih lewat query. Kalau seseorang membuka rute
+  // ini langsung tanpa memilih, "short" adalah satu-satunya yang pernah bisa
+  // dibuat sebelumnya — jadi itu default yang jujur, bukan tebakan.
+  const [jenis, setJenis] = useState<JenisVideo>("short");
+  const [lagu, setLagu] = useState<PilihanBahan | null>(null);
+  const [laguUnggah, setLaguUnggah] = useState<File | null>(null);
   const [folderInfo, setFolderInfo] = useState<FolderBahan | null>(null);
   // Dua folder terpisah: rekaman suara dan klip B-roll punya peran berbeda,
   // jadi wajar disimpan di tempat berbeda. Satu pilihan untuk keduanya memaksa
@@ -79,6 +112,11 @@ export default function NewProjectPage() {
   // berkas dari folder lain yang namanya kebetulan sama.
   const [pilihSuara, setPilihSuara] = useState<PilihanBahan | null>(null);
   const [pilihKlip, setPilihKlip] = useState<PilihanBahan[]>([]);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("jenis");
+    if (q === "short" || q === "cinematic" || q === "amv") setJenis(q);
+  }, []);
 
   const [progress, setProgress] = useState(0);
   const [tahap, setTahap] = useState("");
@@ -189,9 +227,13 @@ export default function NewProjectPage() {
       ? Boolean(conceptId)
       : contoh.length >= 1 && contoh.length <= MAKS_CONTOH && namaKonsep.trim().length > 0;
 
+  // AMV tanpa lagu tidak masuk akal — lagunya yang jadi jalur utama. Dijaga di
+  // sini DAN di server: form bisa dilewati, rutenya tidak.
+  const laguValid = !NAMA_JENIS[jenis].laguWajib || Boolean(lagu || laguUnggah);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!mentahValid || !konsepValid) return;
+    if (!mentahValid || !konsepValid || !laguValid) return;
 
     setBusy(true);
     setError("");
@@ -251,6 +293,38 @@ export default function NewProjectPage() {
         }
       }
 
+      // Lagu diunggah SETELAH bahan mentah, supaya kalau unggahannya gagal,
+      // yang gagal adalah langkah terakhir dan bukan menyisakan project setengah
+      // jadi tanpa bahan.
+      let musik: {
+        key: string;
+        namaFile: string;
+        ukuranBytes?: number;
+        lokal: boolean;
+        bahanFolder: string;
+      } | null = null;
+
+      if (lagu) {
+        musik = {
+          key: "",
+          namaFile: lagu.nama,
+          ukuranBytes: lagu.ukuranBytes,
+          lokal: true,
+          bahanFolder: lagu.folder,
+        };
+      } else if (laguUnggah) {
+        setTahap("Mengunggah lagu");
+        setProgress(0);
+        const a = await uploadFile(laguUnggah, "music", setProgress);
+        musik = {
+          key: a.key,
+          namaFile: a.namaFile,
+          ukuranBytes: a.ukuranBytes,
+          lokal: false,
+          bahanFolder: "",
+        };
+      }
+
       setTahap("Mendaftarkan job");
       const res = await fetch("/api/projects", {
         method: "POST",
@@ -261,6 +335,8 @@ export default function NewProjectPage() {
           // kolom judul yang bisa dipakai pengguna untuk memperbaikinya sendiri.
           judul: daftarBahan[0].nama.slice(0, 200),
           brief,
+          jenis,
+          musik,
           rawKeys,
           ...(sumber === "pustaka"
             ? { conceptId }
@@ -280,9 +356,9 @@ export default function NewProjectPage() {
 
   return (
     <>
-      <div className="badge">Project baru</div>
-      <h1 className="title">Unggah rekaman</h1>
-      <p className="subtitle">Tentukan gayanya, sisanya otomatis.</p>
+      <div className="badge">{NAMA_JENIS[jenis].badge}</div>
+      <h1 className="title">{NAMA_JENIS[jenis].judul}</h1>
+      <p className="subtitle">{NAMA_JENIS[jenis].sub}</p>
 
       <form onSubmit={submit} className="panel stack">
         <div>
@@ -510,6 +586,55 @@ export default function NewProjectPage() {
           )}
         </div>
 
+        {/* ---------- Lagu ---------- */}
+        <div>
+          <label>
+            Lagu {NAMA_JENIS[jenis].laguWajib ? "(wajib)" : "(opsional)"}
+          </label>
+
+          {asal === "lokal" && kelompok.length > 0 ? (
+            // Di mode lokal, lagunya dipilih dari folder bahan yang sama —
+            // agent membacanya di tempat, tanpa satu byte pun naik ke internet.
+            <Dropdown
+              nilai={lagu ? `${lagu.folder}/${lagu.nama}` : ""}
+              placeholder="— tanpa lagu —"
+              disabled={busy}
+              opsi={[
+                { nilai: "", judul: "— tanpa lagu —" },
+                ...kelompok.flatMap((g) =>
+                  g.berkas.map((b) => ({
+                    nilai: `${g.path}/${b.nama}`,
+                    judul: b.nama,
+                    ket: `${(b.ukuranBytes / 1e6).toFixed(0)} MB`,
+                    grup: g.path || "(folder utama)",
+                  })),
+                ),
+              ]}
+              onPilih={(v) => {
+                if (!v) return setLagu(null);
+                const semua = kelompok.flatMap((g) =>
+                  g.berkas.map((b) => ({ ...b, folder: g.path })),
+                );
+                const b = semua.find((x) => kunci(x) === v);
+                setLagu(b ?? null);
+              }}
+            />
+          ) : (
+            <input
+              type="file"
+              accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg"
+              disabled={busy}
+              onChange={(e) => setLaguUnggah(e.target.files?.[0] ?? null)}
+            />
+          )}
+
+          <p className="hint" style={{ marginTop: 6 }}>
+            {NAMA_JENIS[jenis].laguWajib
+              ? "AMV disusun mengikuti lagunya, jadi tanpa lagu tidak ada yang bisa diikuti."
+              : "Dipasang sebagai latar di bawah suara aslinya, pelan, dan meredup di akhir."}
+          </p>
+        </div>
+
         {/* ---------- Konsep ---------- */}
         <div>
           <label>Konsep</label>
@@ -710,7 +835,7 @@ export default function NewProjectPage() {
             halaman sendiri, dan tautan lama ini mendarat di dashboard. */}
         <div className="row" style={{ justifyContent: "space-between" }}>
           <TombolKembali href="/projects" label="Kembali ke project" />
-          <button className="pill pill-aksi" type="submit" disabled={busy || !mentahValid || adaTerlaluBesar || !konsepValid}>
+          <button className="pill pill-aksi" type="submit" disabled={busy || !mentahValid || adaTerlaluBesar || !konsepValid || !laguValid}>
             {busy ? "Memproses..." : asal === "lokal" ? "Mulai" : "Unggah & mulai"}
           </button>
         </div>

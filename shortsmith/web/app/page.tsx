@@ -152,7 +152,7 @@ export default async function Dashboard() {
             </ShinyText>
           </h1>
 
-          <a href={tamu ? "/login?mulai=1" : "/project/new"} className="hero-cta">
+          <a href={tamu ? "/login?mulai=1" : "/video/baru"} className="hero-cta">
             <span>{tamu ? "Get Started" : "Buat short baru"}</span>
             <Panah />
           </a>

@@ -84,6 +84,27 @@ async function buildRenderPayload(job: {
     })),
   );
 
+  // Lagu diambil terpisah dari daftar `raw`, dengan aturan penandatanganan yang
+  // sama: berkas lokal tidak punya objek di storage untuk ditunjuk.
+  const [lagu] = job.project_id
+    ? await db
+        .select()
+        .from(assets)
+        .where(and(eq(assets.projectId, job.project_id), eq(assets.jenis, "music")))
+        .limit(1)
+    : [];
+
+  const musik = lagu
+    ? {
+        namaFile: lagu.namaFile,
+        ukuranBytes: lagu.ukuranBytes,
+        lokal: lagu.lokal,
+        bahanFolder: lagu.bahanFolder,
+        storageKey: lagu.lokal ? "" : lagu.storageKey,
+        downloadUrl: lagu.lokal ? null : await presignDownload(lagu.storageKey),
+      }
+    : null;
+
   const outputKey = buildKey("output", `${job.id}.mp4`);
 
   return {
@@ -95,7 +116,9 @@ async function buildRenderPayload(job: {
     brief: project?.brief ?? "",
     judul: project?.judul ?? "",
     profileJson: concept?.profileJson ?? null,
+    jenis: project?.jenis ?? "short",
     inputs,
+    musik,
     output: { key: outputKey, uploadUrl: await presignUpload(outputKey, "video/mp4") },
   };
 }

@@ -23,6 +23,18 @@ const CreateBody = z
   .object({
     judul: z.string().max(200).default("Tanpa judul"),
     brief: z.string().max(4000).default(""),
+    // Jenis video yang dituju. Menentukan rasio, durasi target, dan subtitle.
+    jenis: z.enum(["short", "cinematic", "amv"]).default("short"),
+    // Lagu latar, opsional — kecuali untuk AMV, yang diperiksa di bawah.
+    musik: z
+      .object({
+        key: z.string().default(""),
+        namaFile: z.string().max(255),
+        ukuranBytes: z.number().int().positive().optional(),
+        lokal: z.boolean().default(false),
+        bahanFolder: z.string().max(300).default(""),
+      })
+      .nullish(),
     // Beberapa video mentah per project. Agent menganalisis tiap file terpisah
     // dan boleh mencampur potongan dari mana pun di antaranya.
     rawKeys: z
@@ -164,9 +176,19 @@ export async function POST(request: Request) {
     conceptId = concept.id;
   }
 
+  // AMV tanpa lagu tidak masuk akal: lagunya yang jadi jalur utama, bukan
+  // latar. Diperiksa di sini, bukan hanya di form — form bisa dilewati, rute
+  // ini tidak.
+  if (body.jenis === "amv" && !body.musik) {
+    return Response.json(
+      { error: "AMV membutuhkan lagu. Pilih berkas audionya lebih dulu." },
+      { status: 400 },
+    );
+  }
+
   const [project] = await db
     .insert(projects)
-    .values({ judul: body.judul, conceptId, brief: body.brief })
+    .values({ judul: body.judul, conceptId, brief: body.brief, jenis: body.jenis })
     .returning();
 
   // Indeks array ditulis eksplisit ke kolom `urutan`. Jangan pernah bersandar
@@ -184,6 +206,23 @@ export async function POST(request: Request) {
       ukuranBytes: r.ukuranBytes,
     })),
   );
+
+  // Lagu disimpan sebagai aset terpisah berjenis `music`, bukan dititipkan ke
+  // daftar `raw`. Kalau ikut di sana, agent akan memperlakukannya sebagai video
+  // mentah — menganalisisnya, memecahnya jadi adegan, dan mencoba mengambil
+  // gambar dari berkas yang tidak punya gambar.
+  if (body.musik) {
+    await db.insert(assets).values({
+      projectId: project.id,
+      jenis: "music" as const,
+      urutan: 0,
+      lokal: body.musik.lokal,
+      bahanFolder: body.musik.bahanFolder,
+      storageKey: body.musik.key,
+      namaFile: body.musik.namaFile,
+      ukuranBytes: body.musik.ukuranBytes,
+    });
+  }
 
   // Job render dibuat sekarang juga, tapi antrean tidak akan mengambilnya
   // sebelum konsepnya `siap` — penjaganya ada di claimNextJobSql().

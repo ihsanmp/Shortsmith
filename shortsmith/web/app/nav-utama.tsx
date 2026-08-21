@@ -30,9 +30,12 @@ const DASHBOARD: ItemNav = {
 };
 
 const BUAT: ItemNav = {
-  label: "Buat Short",
-  href: "/project/new",
-  cocok: (p) => p.startsWith("/project/new"),
+  // Menuju pemilih jenis, bukan langsung ke formnya. Jenis menentukan bentuk
+  // form itu sendiri — rasio, subtitle, wajib-tidaknya lagu — jadi ia harus
+  // dipilih sebelum formnya digambar.
+  label: "Buat Video",
+  href: "/video/baru",
+  cocok: (p) => p.startsWith("/video/") || p.startsWith("/project/new"),
 };
 
 const ABOUT: ItemNav = {

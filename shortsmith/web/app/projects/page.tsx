@@ -86,7 +86,7 @@ export default async function DaftarProject() {
           </h1>
           <span className="hint">{rows.length} project</span>
         </div>
-        <a href="/project/new" className="pill pill-aksi">
+        <a href="/video/baru" className="pill pill-aksi">
           Buat short baru
         </a>
       </div>

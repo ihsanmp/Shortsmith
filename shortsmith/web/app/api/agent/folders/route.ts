@@ -28,6 +28,10 @@ const Body = z.object({
       z.object({
         path: z.string().max(300),
         jumlahVideo: z.number().int().nonnegative(),
+        // Bawaan 0 supaya agent versi lama — yang belum mengenal berkas audio —
+        // tetap diterima. Menjadikannya wajib akan membuat laporan folder dari
+        // agent lama ditolak 400, dan daftar foldernya membeku tanpa penjelasan.
+        jumlahAudio: z.number().int().nonnegative().default(0),
         berkas: z
           .array(
             z.object({

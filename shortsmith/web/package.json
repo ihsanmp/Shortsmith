@@ -27,6 +27,7 @@
     "db:migrasi-users": "tsx scripts/migrasi-users.ts",
     "db:migrasi-profil": "tsx scripts/migrasi-profil.ts",
     "db:migrasi-jenis": "tsx scripts/migrasi-jenis.ts",
+    "db:migrasi-tugas": "tsx scripts/migrasi-tugas.ts",
     "db:migrasi-podcast": "tsx scripts/migrasi-podcast.ts",
     "db:migrasi-rasio": "tsx scripts/migrasi-rasio.ts"
   },

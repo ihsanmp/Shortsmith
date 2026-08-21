@@ -4371,3 +4371,240 @@ body:has(.hero) {
   line-height: 1.65;
   color: var(--ink-4);
 }
+
+/* ==========================================================================
+   Panel Google Flow di bawah form buat video
+   ==========================================================================
+   Berdiri DI LUAR .panel, jadi ia memakai palet gelap seperti sisa halaman —
+   bukan palet platinum milik form. Itu disengaja: panel ini bukan bagian dari
+   isian yang dikirim, melainkan alat bantu yang dipakai sebelum mengirimnya,
+   dan pemisahan warnanya membuat batas itu terbaca tanpa perlu dijelaskan. */
+
+.flowp {
+  width: min(880px, 100%);
+  margin: var(--sp-6) auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.flowp-kepala {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.flowp-judul {
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--ink);
+  margin: 0;
+}
+
+.flowp-ket,
+.flowp-catatan {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.flowp-catatan {
+  padding: var(--sp-3);
+  border-radius: var(--r);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+
+.flowp-mulai {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-4);
+}
+
+.flowp-jumlah {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+
+.flowp-angka {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* 44px penuh: ini target sentuh, dan angka 1-5 yang dibuat sekecil teksnya
+   adalah target 16px yang meleset terus di layar sentuh. */
+.flowp-pilih {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t), color var(--t);
+}
+
+.flowp-pilih:hover {
+  border-color: var(--line-2);
+  background: var(--surface-2);
+}
+
+.flowp-pilih.aktif {
+  border-color: var(--accent);
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.flowp-pilih:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.flowp-daftar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.flowp-kartu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  /* Batas kiri tebal jadi tempat vonis ditandai. Warnanya berubah, lebarnya
+     tidak — kalau lebarnya ikut berubah, seluruh kartu bergeser saat hasil
+     review masuk dan mata kehilangan tempatnya. */
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-2);
+}
+
+.flowp-kartu.lolos {
+  border-left-color: var(--ok);
+}
+
+.flowp-kartu.tolak {
+  border-left-color: var(--err);
+}
+
+.flowp-nomor {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.flowp-prompt {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ink);
+  padding: var(--sp-3);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  /* Prompt Veo panjang dan tanpa spasi di beberapa tempat; tanpa ini ia
+     memanjangkan kartunya melewati lebar halaman. */
+  overflow-wrap: anywhere;
+}
+
+.flowp-salin {
+  align-self: flex-start;
+}
+
+.flowp-unggah {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+
+.flowp-nama {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.flowp-vonis {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  padding: var(--sp-3);
+  border-radius: var(--r);
+}
+
+.flowp-vonis.ok {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+
+.flowp-vonis.buruk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+}
+
+.flowp-vonis.buruk strong {
+  color: var(--err);
+}
+
+.flowp-vonis p {
+  margin: 0;
+}
+
+.flowp-ganti {
+  color: var(--ink-3);
+  font-size: 0.82rem;
+}
+
+.flowp-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+@media (max-width: 640px) {
+  .flowp-mulai,
+  .flowp-aksi {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Penanda "opsional" di judul panel Flow. Ditulis sebagai label kecil di
+   sebelah judul, bukan kalimat terpisah di bawahnya: pengguna memutuskan
+   apakah akan membaca satu bagian dari judulnya, dan keterangan yang baru
+   muncul setelah paragraf penjelasan datang terlambat. */
+.flowp-opsional {
+  margin-left: var(--sp-2);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink-4);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.flowp-nol {
+  margin: 0;
+  flex-basis: 100%;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}

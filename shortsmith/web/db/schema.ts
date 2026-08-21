@@ -32,6 +32,14 @@ export const assetKind = pgEnum("asset_kind", ["raw", "sample", "output", "music
 export const videoJenis = pgEnum("video_jenis", ["short", "cinematic", "amv", "podcast"]);
 
 /**
+ * Permintaan kecil ke agent yang BUKAN render.
+ *
+ * `prompt`  - Claude menuliskan prompt Google Flow dari bahan yang dipilih.
+ * `review`  - Claude memeriksa klip hasil generate terhadap bahan itu.
+ */
+export const tugasTipe = pgEnum("tugas_tipe", ["prompt", "review"]);
+
+/**
  * Akun pengguna.
  *
  * Pendaftaran dijaga kata sandi undangan (`APP_PASSWORD`), jadi tabel ini hanya
@@ -201,6 +209,47 @@ export const assets = pgTable(
  * `render` untuk membuat short video, `profile_extraction` untuk menganalisis
  * video contoh menjadi concept profile.
  */
+/**
+ * Antrean permintaan singkat ke agent, terpisah dari `jobs`.
+ *
+ * ## Kenapa tabel sendiri, bukan satu tipe baru di `jobs`
+ *
+ * Dua alasan yang sama-sama menghalangi:
+ *
+ *  1. **Waktunya.** Permintaan prompt terjadi saat pengguna masih MENGISI form
+ *     — project-nya belum ada. `jobs` bersandar pada `projectId` atau
+ *     `conceptId` untuk tahu apa yang harus dikerjakan, dan keduanya null di
+ *     sini.
+ *  2. **Muatannya.** `jobs` tidak menyimpan payload sama sekali; `/api/jobs/next`
+ *     merakitnya dari project dan assets tiap kali diminta. Permintaan di sini
+ *     justru payload itu sendiri, dan jawabannya juga.
+ *
+ * Menyatukannya berarti menambah dua kolom jsonb yang selalu null untuk setiap
+ * job render, plus percabangan di setiap tempat yang membaca antrean.
+ */
+export const tugas = pgTable(
+  "tugas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tipe: tugasTipe("tipe").notNull(),
+    status: jobStatus("status").notNull().default("pending"),
+    /** Apa yang diminta: jenis, tema, daftar bahan, prompt asli, dan seterusnya. */
+    permintaan: jsonb("permintaan").notNull(),
+    /** Jawaban agent. Null selama belum selesai. */
+    hasil: jsonb("hasil"),
+    errorMessage: text("error_message"),
+    /**
+     * Pemiliknya. Hasil tugas hanya boleh dibaca orang yang memintanya —
+     * prompt dan klip yang diperiksa adalah isi project yang belum jadi.
+     */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("tugas_queue_idx").on(t.status, t.createdAt)],
+);
+
 export const jobs = pgTable(
   "jobs",
   {

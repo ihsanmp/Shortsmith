@@ -35,6 +35,22 @@ HEARTBEAT_INTERVAL = 30
 POLL_KOSONG = 10  # jeda saat antrean kosong
 POLL_ERROR = 30  # jeda setelah error jaringan
 LAPOR_FOLDER_INTERVAL = 300  # seberapa sering daftar folder dikirim ulang
+
+# Akhiran berkas yang dianggap bahan.
+#
+# AUDIO ikut, dan itu bukan kelengkapan iseng: folder `Lagu` berisi mp3 tidak
+# akan pernah terlihat di form kalau pemindainya hanya menghitung video —
+# foldernya terbaca kosong, lalu disaring keluar karena `berkas.length === 0`.
+# Bug yang sama membuat perubahan di folder itu tidak memicu laporan ulang,
+# sehingga menaruh lagu baru tidak pernah sampai ke web.
+#
+# Dipusatkan di sini karena dipakai DUA tempat yang harus selalu sepakat:
+# `_sidik_folder` (mendeteksi perubahan) dan `_kumpulkan_folder` (mengirim
+# daftarnya). Kalau keduanya beda, ada berkas yang terkirim tapi perubahannya
+# tidak terdeteksi — atau sebaliknya.
+EKST_VIDEO = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
+EKST_AUDIO = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
+EKST_BAHAN = EKST_VIDEO | EKST_AUDIO
 MAKS_BERKAS = 100  # batas berkas per folder yang dikirim ke form
 
 
@@ -152,12 +168,118 @@ class Daemon:
                     terakhir_lapor = time.time()
 
             if not job:
+                # Antrean render kosong — pakai giliran ini untuk tugas singkat.
+                #
+                # Sengaja SETELAH job, bukan sebelum: render adalah pekerjaan
+                # yang benar-benar diminta pengguna, sedangkan tugas di sini
+                # membantu ia menyiapkannya. Menulis prompt sambil membiarkan
+                # render menunggu adalah urutan yang terbalik.
+                if self._ambil_tugas():
+                    continue
                 self.berhenti.wait(POLL_KOSONG)
                 continue
 
             self._kerjakan(job)
 
         log.info("daemon berhenti.")
+
+    def _ambil_tugas(self) -> bool:
+        """Kerjakan satu tugas singkat kalau ada. True kalau ada yang dikerjakan."""
+        try:
+            t = self.api.next_tugas()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("gagal mengambil tugas (%s)", exc)
+            return False
+        if not t:
+            return False
+
+        tugas_id, tipe = t["id"], t["tipe"]
+        log.info("=== tugas %s (%s) ===", tugas_id, tipe)
+        try:
+            if tipe == "prompt":
+                hasil = self._tugas_prompt(t["permintaan"])
+            elif tipe == "review":
+                hasil = self._tugas_review(t["permintaan"])
+            else:
+                raise ValueError(f"tipe tugas tidak dikenal: {tipe}")
+        except Exception as exc:  # noqa: BLE001
+            # Dilaporkan, bukan ditelan. Tugas yang gagal diam-diam akan
+            # dibebaskan penjaga tugas-basi, diambil lagi, dan gagal lagi —
+            # sementara pengguna menunggu jawaban yang tidak pernah datang.
+            log.exception("tugas %s gagal", tugas_id)
+            self.api.lapor_tugas(tugas_id, error=f"{type(exc).__name__}: {exc}"[:2000])
+            return True
+
+        self.api.lapor_tugas(tugas_id, hasil=hasil)
+        log.info("tugas %s selesai", tugas_id)
+        return True
+
+    def _tugas_prompt(self, p: dict[str, Any]) -> dict[str, Any]:
+        from .pemasok import tulis_saja
+
+        prompts = tulis_saja(
+            int(p.get("jumlah") or 3),
+            jenis=p.get("jenis") or "cinematic",
+            tema=p.get("tema") or "",
+            durasi=float(p.get("durasi") or 8),
+            sudah_ada=list(p.get("sudahAda") or []),
+        )
+        return {"prompts": prompts}
+
+    def _tugas_review(self, p: dict[str, Any]) -> dict[str, Any]:
+        from .penilai import periksa
+
+        kerja = SETTINGS.work_dir / "tugas"
+        kerja.mkdir(parents=True, exist_ok=True)
+
+        klip: list[Path] = []
+        prompts: dict[str, str] = {}
+        for k in p.get("klip") or []:
+            berkas = self._unduh(
+                {"namaFile": k["nama"], "downloadUrl": k.get("url"), "storageKey": k.get("key", "")},
+                kerja,
+            )
+            klip.append(berkas)
+            prompts[berkas.name] = k.get("prompt") or ""
+
+        # Bahan tanpa URL berarti mode folder lokal: ia ada di disk pengguna dan
+        # tidak pernah diunggah. Yang tidak ketemu dilewati, bukan menggagalkan
+        # seluruh review — pemeriksaan isi tetap bisa jalan tanpa pembanding.
+        bahan: list[Path] = []
+        for b in p.get("bahan") or []:
+            try:
+                if b.get("url"):
+                    bahan.append(self._unduh(
+                        {"namaFile": b["nama"], "downloadUrl": b["url"],
+                         "storageKey": b.get("key", "")}, kerja))
+                else:
+                    bahan.append(self._berkas_lokal({
+                        "namaFile": b["nama"],
+                        "bahanFolder": b.get("folder") or "",
+                    }))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("bahan pembanding '%s' dilewati: %s", b.get("nama"), exc)
+
+        hasil = periksa(
+            klip, bahan, jenis=p.get("jenis") or "cinematic", prompts=prompts,
+            kerja=kerja / "frame",
+        )
+        return {
+            "terangBahan": round(hasil.terang_bahan, 1),
+            "semuaCocok": hasil.semua_cocok,
+            "penilaian": [
+                {
+                    "nama": x.nama,
+                    "cocok": x.cocok,
+                    "alasan": x.alasan,
+                    "alasanUkur": x.alasan_ukur,
+                    "alasanIsi": x.alasan_isi,
+                    "promptBaru": x.prompt_baru,
+                    "terang": round(x.terang, 1),
+                }
+                for x in hasil.penilaian
+            ],
+        }
 
     def _kerjakan(self, job: dict[str, Any]) -> None:
         job_id = job["id"]
@@ -307,7 +429,6 @@ class Daemon:
         cukup — berkas yang diganti dengan berkas lain berukuran sama akan lolos,
         dan itu justru yang terjadi saat pengguna menimpa hasil rekaman.
         """
-        VIDEO = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
         root = SETTINGS.bahan_dir.resolve()
         if not root.is_dir():
             return ()
@@ -317,7 +438,7 @@ class Daemon:
                 if not d.is_dir():
                     continue
                 for f in sorted(d.iterdir()):
-                    if f.is_file() and f.suffix.lower() in VIDEO:
+                    if f.is_file() and f.suffix.lower() in EKST_BAHAN:
                         st = f.stat()
                         isi.append((d.name, f.name, st.st_size, st.st_mtime_ns))
         except OSError:
@@ -333,7 +454,6 @@ class Daemon:
         pengguna akan lambat dan menghasilkan daftar yang terlalu panjang untuk
         dipilih — dan bahan video jarang ditumpuk lebih dalam dari itu.
         """
-        VIDEO = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
         root = SETTINGS.bahan_dir.resolve()
         folders: list[dict[str, Any]] = []
 
@@ -352,7 +472,7 @@ class Daemon:
                     (
                         {"nama": f.name, "ukuranBytes": f.stat().st_size}
                         for f in d.iterdir()
-                        if f.is_file() and f.suffix.lower() in VIDEO
+                        if f.is_file() and f.suffix.lower() in EKST_BAHAN
                     ),
                     key=lambda x: x["nama"].lower(),
                 )[:MAKS_BERKAS]
@@ -361,7 +481,19 @@ class Daemon:
 
         def catat(path: str, d: Path) -> None:
             berkas = isi(d)
-            folders.append({"path": path, "jumlahVideo": len(berkas), "berkas": berkas})
+            # Dihitung terpisah, bukan `len(berkas)` untuk keduanya. Sejak audio
+            # ikut terdaftar, satu angka bernama "jumlahVideo" yang sebenarnya
+            # menghitung mp3 juga adalah nama yang berbohong — dan form memakai
+            # angka itu untuk memberi tahu pengguna apa yang ada di foldernya.
+            video = sum(
+                1 for b in berkas if Path(b["nama"]).suffix.lower() in EKST_VIDEO
+            )
+            folders.append({
+                "path": path,
+                "jumlahVideo": video,
+                "jumlahAudio": len(berkas) - video,
+                "berkas": berkas,
+            })
 
         catat("", root)
         try:

@@ -10,6 +10,13 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
  *   /api/jobs/*   — dipakai agent, punya autentikasinya sendiri (X-Agent-Key).
  *   /api/agent/*  — sama: agent melapor ke sini, dijaga X-Agent-Key.
  *                  Agent bukan browser dan tidak punya cookie.
+ *   /api/tugas/next dan /api/tugas/<id>/hasil — dua sisi agent dari antrean
+ *                  tugas. Sengaja disebut SATU PER SATU, bukan sebagai awalan
+ *                  /api/tugas: awalan itu akan ikut membebaskan POST /api/tugas
+ *                  (pengguna membuat permintaan) dan GET /api/tugas/<id>
+ *                  (pengguna membaca hasilnya), sehingga siapa pun tanpa cookie
+ *                  bisa menyuruh `claude -p` berjalan di PC pemilik agent dan
+ *                  membaca prompt milik orang lain.
  *   /login       — kalau ini ikut dijaga, tidak ada yang bisa masuk.
  *   /api/daftar  — pendaftaran akun; ia dijaga kata sandi undangannya sendiri.
  *
@@ -23,6 +30,8 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/api/jobs") ||
     pathname.startsWith("/api/agent") ||
+    pathname === "/api/tugas/next" ||
+    (pathname.startsWith("/api/tugas/") && pathname.endsWith("/hasil")) ||
     pathname === "/login" ||
     pathname === "/api/login" ||
     pathname === "/api/daftar"

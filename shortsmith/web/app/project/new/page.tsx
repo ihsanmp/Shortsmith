@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+import { PanelFlow } from "@/components/panel-flow";
 import { uploadFile } from "@/lib/upload";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Memuat } from "@/components/ui/memuat";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
 import { Dropdown } from "@/components/ui/dropdown";
+import { galatDari } from "@/lib/galat";
 
 type Concept = { id: string; nama: string; siap: boolean; isDefault: boolean };
 type Sumber = "pustaka" | "unggah";
@@ -65,7 +67,13 @@ type BerkasBahan = { nama: string; ukuranBytes: number };
 type PilihanBahan = BerkasBahan & { folder: string };
 type FolderBahan = {
   root: string | null;
-  folders: { path: string; jumlahVideo: number; berkas: BerkasBahan[] }[];
+  folders: {
+    path: string;
+    jumlahVideo: number;
+    /** Berkas lagu. Opsional: agent lama tidak mengirimnya. */
+    jumlahAudio?: number;
+    berkas: BerkasBahan[];
+  }[];
   updatedAt: string | null;
 };
 
@@ -82,18 +90,6 @@ const RASIO = [
 const MAKS_CONTOH = 4;
 const MAKS_MENTAH = 10;
 
-/**
- * Gabungkan `error` dengan `detail` dari API.
- *
- * Tanpa ini, kegagalan validasi hanya muncul sebagai "Body tidak valid" —
- * benar, tapi tidak bisa ditindaklanjuti. Detail dari Zod menyebut field mana
- * yang ditolak dan kenapa, dan itulah satu-satunya bagian yang berguna saat
- * sesuatu tiba-tiba berhenti bekerja.
- */
-function pesanError(d: { error?: string; detail?: string }, bawaan: string): string {
-  const utama = d?.error ?? bawaan;
-  return d?.detail ? `${utama} — ${d.detail}` : utama;
-}
 
 export default function NewProjectPage() {
   const [concepts, setConcepts] = useState<Concept[]>([]);
@@ -217,6 +213,20 @@ export default function NewProjectPage() {
   // lalu pilih berkas — dan itu dua langkah untuk satu keputusan. Sekarang
   // berkasnya didaftar langsung, dikelompokkan menurut folder asalnya.
   const kelompok = (folderInfo?.folders ?? []).filter((f) => f.berkas.length > 0);
+
+  // Folder yang TERBACA agent tapi belum ada isinya.
+  //
+  // Sebelumnya folder kosong hilang begitu saja dari halaman ini, dan itu
+  // menghapus perbedaan antara tiga keadaan yang jauh berbeda: foldernya belum
+  // dibuat, foldernya ada tapi kosong, dan agent-nya sedang mati sehingga
+  // daftarnya basi. Ketiganya terlihat identik — tidak ada apa-apa di layar —
+  // sehingga folder kosong dilaporkan sebagai "tidak terbaca".
+  //
+  // Root ("") sengaja dikecualikan: bahan memang ditata per subfolder, jadi
+  // root yang kosong adalah keadaan normal dan menyebutnya cuma jadi derau.
+  const folderKosong = (folderInfo?.folders ?? []).filter(
+    (f) => f.path && f.berkas.length === 0,
+  );
   const kunci = (b: PilihanBahan) => `${b.folder}/${b.nama}`;
 
   // Dua mode memberi bentuk data yang berbeda, tapi sisa form hanya perlu tahu
@@ -370,7 +380,7 @@ export default function NewProjectPage() {
         }),
       });
 
-      if (!res.ok) throw new Error(pesanError(await res.json(), "Gagal membuat project"));
+      if (!res.ok) throw new Error(await galatDari(res, "Gagal membuat project"));
       const { project } = await res.json();
       window.location.href = `/project/${project.id}`;
     } catch (err) {
@@ -548,6 +558,16 @@ export default function NewProjectPage() {
                       </div>
                     </div>
                   ))
+                )}
+                {folderKosong.length > 0 && (
+                  <p className="hint" style={{ marginTop: 6 }}>
+                    Folder terbaca tapi masih kosong:{" "}
+                    <span className="mono">
+                      {folderKosong.map((f) => f.path).join(", ")}
+                    </span>
+                    . Taruh berkas di sana dan daftarnya menyusul sendiri dalam
+                    beberapa detik.
+                  </p>
                 )}
                 <p className="hint" style={{ marginTop: 6 }}>
                   Hanya gambarnya yang dipakai &mdash; suara klip diabaikan, dan klip tidak
@@ -883,6 +903,23 @@ export default function NewProjectPage() {
           </button>
         </div>
       </form>
+
+      {/* Di LUAR <form>, dan itu disengaja.
+          
+          Panel ini punya tombolnya sendiri yang memanggil API lain. Di dalam
+          <form>, tombol tanpa type="button" akan mengirim formnya — dan di sini
+          itu berarti menekan "Salin prompt" malah memulai render. Menaruhnya di
+          luar membuat kesalahan itu mustahil, bukan sekadar dihindari.
+          
+          Ia juga bukan bagian dari yang dikirim: klip Flow mendarat di folder
+          bahan sebagai kandidat biasa, dan project dibuat dari daftar bahan
+          seperti sebelumnya. */}
+      <PanelFlow
+        jenis={jenis}
+        tema={brief}
+        aktif={daftarBahan.length > 0}
+        bahan={daftarBahan.map((b) => ({ nama: b.nama, key: "", folder: b.folder }))}
+      />
     </>
   );
 }

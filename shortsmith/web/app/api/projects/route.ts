@@ -24,7 +24,11 @@ const CreateBody = z
     judul: z.string().max(200).default("Tanpa judul"),
     brief: z.string().max(4000).default(""),
     // Jenis video yang dituju. Menentukan rasio, durasi target, dan subtitle.
-    jenis: z.enum(["short", "cinematic", "amv"]).default("short"),
+    jenis: z.enum(["short", "cinematic", "amv", "podcast"]).default("short"),
+    // Rasio keluaran pilihan pengguna. "auto" = serahkan pada jenis dan konsep.
+    rasio: z
+      .enum(["auto", "9:16", "16:9", "1:1", "4:5", "3:4"])
+      .default("auto"),
     // Lagu latar, opsional — kecuali untuk AMV, yang diperiksa di bawah.
     musik: z
       .object({
@@ -188,7 +192,13 @@ export async function POST(request: Request) {
 
   const [project] = await db
     .insert(projects)
-    .values({ judul: body.judul, conceptId, brief: body.brief, jenis: body.jenis })
+    .values({
+      judul: body.judul,
+      conceptId,
+      brief: body.brief,
+      jenis: body.jenis,
+      rasio: body.rasio,
+    })
     .returning();
 
   // Indeks array ditulis eksplisit ke kolom `urutan`. Jangan pernah bersandar

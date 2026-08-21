@@ -23,19 +23,28 @@ Konsekuensinya jujur: memilih "AMV" tidak membuat potongannya mengikuti ketukan
 lagu. Untuk itu dibutuhkan deteksi ketukan dan penjadwalan potongan terhadapnya —
 pekerjaan tersendiri yang belum ada di pipeline ini.
 
-## Apa yang diukur dari dua contoh AMV yang dikirim pengguna
+## Apa yang diukur dari contoh yang dikirim pengguna
 
-    kuroshin031     1024x576 (16:9)   34 potongan / 16,2s   shot median 0,32s
-    hatsune_arima0   576x746 (3:4)    39 potongan / 19,3s   shot median 0,33s
+    AMV  kuroshin031      1024x576 16:9        shot 0,32s  2,10/dtk  tanpa subtitle
+    AMV  hatsune_arima0    576x746  3:4 potret  shot 0,33s  2,02/dtk  tanpa subtitle
+    CINE rpm.cinema        576x1024 9:16 potret shot 1,90s  0,35/dtk  tanpa subtitle
+    CINE bubbawubba7      1280x720  16:9        shot 1,03s  0,68/dtk  tanpa subtitle
+    POD  thecliper554     1024x576  16:9        shot 2,00s  0,26/dtk  SUBTITLE terbakar
 
-Dua hal yang konsisten: panjang shot ~0,33 detik, dan laju ~2 potongan per
-detik. Satu hal yang TIDAK konsisten: rasio — makanya jenis ini tidak lagi
-memaksanya.
+Rasio berbeda-beda di semua kategori, jadi ia bukan penanda apa pun. Yang
+memisahkan dengan bersih cuma dua hal:
 
-Panjang shot itu sendiri sengaja tidak diatur di sini. Ia justru hal yang paling
-tepat diukur lewat konsep: buat konsep dari video AMV contoh, dan
-`avg_shot_length` akan terisi ~0,33 detik dari bahan yang sebenarnya — bukan dari
-angka yang diketik di file ini.
+  - **Ritme.** AMV 0,32-0,33 detik per shot; sisanya 1,0-2,0 detik. Beda hampir
+    enam kali lipat, dan tidak ada yang berada di antaranya.
+  - **Subtitle.** Ada pada podcast (dan short); tidak ada pada cinematic dan AMV.
+
+Cinematic dan podcast TIDAK terpisah oleh ritme — 1,90 lawan 2,00 detik praktis
+sama. Yang membedakan keduanya adalah ada tidaknya ucapan yang perlu dibaca.
+
+Ritme itu sengaja TIDAK diatur di file ini. Ia justru hal yang paling tepat
+diukur lewat konsep: buat konsep dari beberapa video contoh, dan
+`avg_shot_length` terisi dari bahan yang sebenarnya — bukan dari angka yang
+diketik seseorang di sini.
 """
 
 from __future__ import annotations
@@ -56,13 +65,27 @@ GAIN_UTAMA = -3.0
 
 # `rasio: None` berarti JANGAN ditimpa — pakai apa pun yang ditetapkan konsep.
 #
-# AMV sempat dipaksa 16:9 di sini. Itu keliru, dan terbantah oleh contoh yang
-# dikirim pengguna: dari dua AMV, satu 1024x576 (16:9) dan satu 576x746
-# (potret 3:4). Rasio bukan ciri AMV — ia mengikuti ke mana videonya diunggah.
+# AMV dan cinematic sempat dipaksa 16:9 di sini. Keduanya terbantah oleh contoh
+# yang dikirim pengguna, yang rasionya justru berbeda-beda semua:
+#
+#     AMV kuroshin031      1024x576  16:9
+#     AMV hatsune_arima0    576x746  3:4 potret
+#     cinematic rpm.cinema  576x1024 9:16 potret
+#
+# Rasio bukan penanda jenis — ia mengikuti ke mana videonya diunggah, dan itu
+# sudah diukur konsep dari video contohnya sendiri.
+#
+# Short tetap dipaksa 9:16, dan itu bukan pengecualian yang sembarangan: TikTok,
+# Reels, dan Shorts memang mensyaratkannya. Itu tuntutan platform, bukan selera
+# gaya yang bisa diukur dari bahan.
 ATURAN: dict[str, dict] = {
     "short": {"rasio": "9:16", "subtitle": True, "gain_db": GAIN_LATAR},
-    "cinematic": {"rasio": "16:9", "subtitle": False, "gain_db": GAIN_LATAR},
+    "cinematic": {"rasio": None, "subtitle": False, "gain_db": GAIN_LATAR},
     "amv": {"rasio": None, "subtitle": False, "gain_db": GAIN_UTAMA},
+    # Podcast: ada ucapan, jadi subtitle menyala seperti short — tapi rasionya
+    # TIDAK dipaksa. Contoh yang diukur 16:9 lanskap, dan klip podcast memang
+    # beredar di lanskap maupun potret tergantung tujuan unggahnya.
+    "podcast": {"rasio": None, "subtitle": True, "gain_db": GAIN_LATAR},
 }
 
 
@@ -71,8 +94,15 @@ def gain_musik(jenis: str) -> float:
     return ATURAN.get(jenis, ATURAN["short"])["gain_db"]
 
 
-def terapkan_jenis(profile: ConceptProfile, jenis: str) -> ConceptProfile:
+def terapkan_jenis(
+    profile: ConceptProfile, jenis: str, rasio: str = "auto"
+) -> ConceptProfile:
     """Kembalikan SALINAN profil dengan setelan jenis diterapkan.
+
+    `rasio` adalah pilihan eksplisit pengguna dan MENANG atas apa pun. Ia yang
+    paling tahu ke mana videonya akan diunggah, dan lima contoh yang pernah
+    diukur punya lima rasio berbeda di kategori yang sama — jadi tidak ada
+    tebakan dari jenis yang bisa mengalahkannya.
 
     Salinan, bukan perubahan di tempat: profil yang sama bisa dipakai lagi oleh
     job berikutnya lewat cache, dan menyuntikkan setelan satu job ke dalamnya
@@ -88,14 +118,20 @@ def terapkan_jenis(profile: ConceptProfile, jenis: str) -> ConceptProfile:
     # `aspect_ratio` disimpan sebagai string di profil, dan diterjemahkan jadi
     # piksel oleh `resolution_for()` saat EDL dibangun — jadi cukup stringnya
     # yang diganti di sini. `None` berarti biarkan apa adanya.
-    if aturan["rasio"] is not None:
+    if rasio and rasio != "auto":
+        p.aspect_ratio = rasio
+        sumber_rasio = "pilihan pengguna"
+    elif aturan["rasio"] is not None:
         p.aspect_ratio = aturan["rasio"]
+        sumber_rasio = f"bawaan {jenis}"
+    else:
+        sumber_rasio = "dari konsep"
     p.caption.ada = bool(aturan["subtitle"])
 
     log.info(
         "jenis '%s': rasio %s, subtitle %s, lagu %.0f dB",
         jenis,
-        aturan["rasio"] or f"{p.aspect_ratio} (dari konsep)",
+        f"{p.aspect_ratio} ({sumber_rasio})",
         "ya" if aturan["subtitle"] else "tidak",
         aturan["gain_db"],
     )

@@ -25,14 +25,21 @@ const JENIS = [
     nama: "Short",
     ringkas: "Tegak 9:16, subtitle menempel",
     isi: "Untuk TikTok, Reels, dan YouTube Shorts. Potongan rapat mengikuti kalimat, subtitle dibakar di gambar, target sekitar satu menit.",
-    detail: ["9:16 · 1080×1920", "Subtitle otomatis", "Musik opsional, pelan"],
+    detail: ["9:16 bawaan", "Subtitle otomatis", "Musik opsional, pelan"],
   },
   {
     id: "cinematic",
     nama: "Cinematic",
-    ringkas: "Lanskap 16:9, tanpa subtitle",
-    isi: "Untuk potongan bergaya film: rasio lebar, potongan lebih panjang dan bernapas, tanpa teks di gambar supaya bingkainya bersih.",
-    detail: ["16:9 · 1920×1080", "Tanpa subtitle", "Musik opsional"],
+    ringkas: "Potongan lambat, tanpa subtitle",
+    isi: "Untuk potongan bergaya film: shot panjang yang bernapas, gambar gelap dan berkontras, tanpa teks supaya bingkainya bersih.",
+    detail: ["Rasio dari konsep", "Tanpa subtitle", "Musik opsional"],
+  },
+  {
+    id: "podcast",
+    nama: "Klip podcast",
+    ringkas: "Obrolan dengan subtitle",
+    isi: "Potongan dari rekaman obrolan: ritme lebih lambat, subtitle menempel karena yang dijual adalah apa yang diucapkan.",
+    detail: ["Rasio bebas dipilih", "Subtitle otomatis", "Musik opsional"],
   },
   {
     id: "amv",
@@ -75,11 +82,13 @@ export default function PilihJenis() {
           mengecewakan. Jenis mengubah bingkai dan panjang; ia tidak mengubah
           cara agent memutuskan potongan mana yang dipakai. */}
       <p className="jenis-catatan">
-        Ketiganya memakai mesin editing yang sama. Yang membedakan adalah rasio,
-        subtitle, dan kekerasan lagu — sedangkan <strong>ritme potongannya
-        datang dari konsep</strong>, yang diukur dari video contoh. Untuk AMV
-        itu berarti: buat konsep dari beberapa AMV yang kamu suka, dan panjang
-        shot-nya akan terukur dari sana.
+        Keempatnya memakai mesin editing yang sama. Yang jenisnya tentukan cuma
+        dua: apakah subtitle dibakar, dan seberapa keras lagunya. Rasio kamu
+        pilih sendiri di langkah berikutnya, dan <strong>ritme potongannya datang
+        dari konsep</strong> yang diukur dari video contoh. Untuk AMV itu
+        berarti: buat konsep dari beberapa AMV yang kamu suka, dan panjang
+        shot-nya akan terukur dari sana — sekitar 0,33 detik pada contoh yang
+        sudah diukur, lawan 1,9&ndash;2,0 detik untuk cinematic dan podcast.
       </p>
     </section>
   );

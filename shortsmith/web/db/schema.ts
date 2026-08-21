@@ -29,7 +29,7 @@ export const assetKind = pgEnum("asset_kind", ["raw", "sample", "output", "music
  * dibakar — tiga hal yang memang sudah bisa dikendalikan pipeline. Yang belum
  * dikendalikannya adalah gaya potongannya sendiri; itu tetap datang dari konsep.
  */
-export const videoJenis = pgEnum("video_jenis", ["short", "cinematic", "amv"]);
+export const videoJenis = pgEnum("video_jenis", ["short", "cinematic", "amv", "podcast"]);
 
 /**
  * Akun pengguna.
@@ -114,6 +114,14 @@ export const projects = pgTable(
       .references(() => conceptProfiles.id, { onDelete: "restrict" }),
     brief: text("brief").notNull().default(""),
     jenis: videoJenis("jenis").notNull().default("short"),
+    /**
+     * Rasio keluaran yang DIPILIH pengguna, atau "auto".
+     *
+     * Text, bukan enum: daftar rasio hidup di agent, dan menambah satu di sana
+     * tidak boleh menuntut migrasi database. "auto" berarti serahkan pada jenis
+     * dan konsep — perilaku sebelum kolom ini ada.
+     */
+    rasio: text("rasio").notNull().default("auto"),
     status: jobStatus("status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -117,6 +117,7 @@ async function buildRenderPayload(job: {
     judul: project?.judul ?? "",
     profileJson: concept?.profileJson ?? null,
     jenis: project?.jenis ?? "short",
+    rasio: project?.rasio ?? "auto",
     inputs,
     musik,
     output: { key: outputKey, uploadUrl: await presignUpload(outputKey, "video/mp4") },

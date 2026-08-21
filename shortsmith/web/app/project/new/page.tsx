@@ -10,9 +10,25 @@ import { Dropdown } from "@/components/ui/dropdown";
 
 type Concept = { id: string; nama: string; siap: boolean; isDefault: boolean };
 type Sumber = "pustaka" | "unggah";
-type JenisVideo = "short" | "cinematic" | "amv";
+type JenisVideo = "short" | "cinematic" | "amv" | "podcast";
 
 /** Nama yang ditampilkan per jenis, plus apakah lagunya wajib. */
+/**
+ * Rasio keluaran yang bisa dipilih.
+ *
+ * Daftarnya cermin dari RASIO di agent/shortsmith/models.py — di sanalah rasio
+ * diterjemahkan jadi piksel. Menambah satu di sini tanpa menambahnya di sana
+ * menghasilkan pilihan yang diterima form lalu diabaikan diam-diam saat render.
+ */
+const RASIO_OUT = [
+  { nilai: "auto", judul: "Otomatis", ket: "ikut jenis & konsep" },
+  { nilai: "9:16", judul: "9:16 tegak", ket: "TikTok, Reels, Shorts" },
+  { nilai: "16:9", judul: "16:9 lanskap", ket: "YouTube, podcast" },
+  { nilai: "4:5", judul: "4:5", ket: "feed Instagram" },
+  { nilai: "3:4", judul: "3:4", ket: "potret pendek" },
+  { nilai: "1:1", judul: "1:1 persegi", ket: "feed persegi" },
+];
+
 const NAMA_JENIS: Record<
   JenisVideo,
   { badge: string; judul: string; sub: string; laguWajib: boolean }
@@ -34,6 +50,12 @@ const NAMA_JENIS: Record<
     judul: "Unggah klip",
     sub: "Gambar mengikuti lagu. Lagunya jalur utama, jadi ia wajib diisi.",
     laguWajib: true,
+  },
+  podcast: {
+    badge: "Klip podcast baru",
+    judul: "Unggah rekaman",
+    sub: "Potongan obrolan dengan subtitle menempel, ritme lebih lambat.",
+    laguWajib: false,
   },
 };
 
@@ -99,6 +121,9 @@ export default function NewProjectPage() {
   // ini langsung tanpa memilih, "short" adalah satu-satunya yang pernah bisa
   // dibuat sebelumnya — jadi itu default yang jujur, bukan tebakan.
   const [jenis, setJenis] = useState<JenisVideo>("short");
+  // "auto" berarti serahkan pada jenis dan konsep — perilaku sebelum pilihan
+  // ini ada, jadi tidak ada yang berubah bagi yang tidak menyentuhnya.
+  const [rasioOut, setRasioOut] = useState("auto");
   const [lagu, setLagu] = useState<PilihanBahan | null>(null);
   const [laguUnggah, setLaguUnggah] = useState<File | null>(null);
   const [folderInfo, setFolderInfo] = useState<FolderBahan | null>(null);
@@ -115,7 +140,7 @@ export default function NewProjectPage() {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("jenis");
-    if (q === "short" || q === "cinematic" || q === "amv") setJenis(q);
+    if (q === "short" || q === "cinematic" || q === "amv" || q === "podcast") setJenis(q);
   }, []);
 
   const [progress, setProgress] = useState(0);
@@ -336,6 +361,7 @@ export default function NewProjectPage() {
           judul: daftarBahan[0].nama.slice(0, 200),
           brief,
           jenis,
+          rasio: rasioOut,
           musik,
           rawKeys,
           ...(sumber === "pustaka"
@@ -584,6 +610,23 @@ export default function NewProjectPage() {
               Ada file di atas 5 GB.
             </div>
           )}
+        </div>
+
+        {/* ---------- Rasio keluaran ---------- */}
+        <div>
+          <label htmlFor="rasio-out">Rasio keluaran</label>
+          <Dropdown
+            id="rasio-out"
+            nilai={rasioOut}
+            disabled={busy}
+            opsi={RASIO_OUT}
+            onPilih={setRasioOut}
+          />
+          <p className="hint" style={{ marginTop: 6 }}>
+            {rasioOut === "auto"
+              ? "Mengikuti jenis dan konsep. Short selalu 9:16; sisanya memakai rasio video contoh konsepnya."
+              : "Pilihanmu menang atas jenis maupun konsep."}
+          </p>
         </div>
 
         {/* ---------- Lagu ---------- */}

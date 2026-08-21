@@ -218,7 +218,7 @@ class Daemon:
         # itu tetap milik konsep, dan menebaknya dari satu label jenis akan
         # menghasilkan editing yang tidak pernah diukur dari contoh mana pun.
         jenis = job.get("jenis") or "short"
-        profile = terapkan_jenis(profile, jenis)
+        profile = terapkan_jenis(profile, jenis, job.get("rasio") or "auto")
 
         # Lagu, kalau ada. Diunduh dengan aturan yang sama seperti bahan mentah:
         # berkas lokal dipakai di tempatnya, tanpa disalin.

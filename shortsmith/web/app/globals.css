@@ -241,10 +241,33 @@ code {
    Kerangka
    ========================================================================== */
 
+/* Lebar penuh, dengan tepi yang tumbuh mengikuti layar.
+   
+   Sebelumnya dipatok 1080px. Di monitor 2560px itu menyisakan 740px kosong di
+   KIRI dan KANAN setiap halaman — bukan cuma satu halaman, karena patokan ini
+   membungkus seluruhnya.
+   
+   Yang dibatasi sekarang bukan wadahnya, melainkan isi yang memang tidak boleh
+   melebar: paragraf dan form. Grid kartu justru diuntungkan — `auto-fill` akan
+   menambah kolom sendiri begitu ruangnya ada. */
 .shell {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: var(--sp-4) var(--sp-5) var(--sp-7);
+  padding: var(--sp-4) clamp(20px, 4vw, 88px) var(--sp-7);
+}
+
+/* Isi satu kolom tetap dibatasi DAN dipusatkan.
+   Dibatasi karena baris teks selebar 2400px tidak bisa dibaca — mata kehilangan
+   awal baris berikutnya. Dipusatkan karena blok sempit yang menempel di kiri
+   layar lebar terbaca sebagai kesalahan tata letak, bukan pilihan. */
+.panel {
+  max-width: 900px;
+  margin-inline: auto;
+}
+
+/* Halaman profil memang satu kolom terpusat — melebarkannya cuma menghasilkan
+   kartu kurus yang mengambang di tengah lautan kosong. */
+.profil-halaman {
+  max-width: 1400px;
+  margin-inline: auto;
 }
 
 /* Grid tiga kolom `1fr auto 1fr`, bukan flex `space-between`.
@@ -601,9 +624,14 @@ input[type="range"] {
   accent-color: var(--focus);
 }
 
+/* Putih, bukan ungu aksen.
+   Radio dan checkbox adalah penanda KEADAAN, bukan tautan atau tombol. Memberi
+   mereka warna aksen membuat mata membacanya sebagai sesuatu yang menonjol dan
+   perlu ditindaklanjuti, padahal ia hanya menyatakan apa yang sudah dipilih.
+   Putih menyatakan hal itu dengan tegas tanpa berteriak. */
 input[type="checkbox"],
 input[type="radio"] {
-  accent-color: var(--focus);
+  accent-color: #ffffff;
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -688,7 +716,10 @@ label:has(input[type="checkbox"]) {
 .btn.ghost {
   background: linear-gradient(180deg, #1b1b1e 0%, #0a0a0c 100%);
   border-color: rgba(255, 255, 255, 0.11);
-  color: var(--ink);
+  /* Putih tetap, bukan var(--ink) — alasannya sama persis dengan tombol back
+     bulat: latarnya selalu gradasi gelap, jadi warna teksnya tidak boleh ikut
+     membalik saat berada di dalam panel terang. */
+  color: #f1f5f9;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     inset 0 -1px 0 rgba(0, 0, 0, 0.5),
@@ -699,7 +730,7 @@ label:has(input[type="checkbox"]) {
 .btn.ghost:hover:not(:disabled) {
   background: linear-gradient(180deg, #232327 0%, #101013 100%);
   border-color: rgba(255, 255, 255, 0.18);
-  color: var(--ink);
+  color: #f1f5f9;
   opacity: 1;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
@@ -1575,14 +1606,16 @@ video {
 .btn,
 .pill,
 .glass-button,
-.kembali-bulat {
+.kembali-bulat,
+.profil-halaman-tombol {
   position: relative;
 }
 
 .btn::before,
 .pill::before,
 .glass-button::before,
-.kembali-bulat::before {
+.kembali-bulat::before,
+.profil-halaman-tombol::before {
   content: "";
   position: absolute;
   inset: -1px;
@@ -1613,7 +1646,8 @@ video {
 .btn:hover:not(:disabled)::before,
 .pill:hover::before,
 .glass-button:hover:not(:disabled)::before,
-.kembali-bulat:hover::before {
+.kembali-bulat:hover::before,
+.profil-halaman-tombol:hover:not(:disabled)::before {
   opacity: 1;
   animation: rim-berputar 2.2s linear infinite;
 }
@@ -1629,7 +1663,8 @@ video {
   .btn:hover:not(:disabled)::before,
   .pill:hover::before,
   .glass-button:hover:not(:disabled)::before,
-  .kembali-bulat:hover::before {
+  .kembali-bulat:hover::before,
+  .profil-halaman-tombol:hover:not(:disabled)::before {
     animation: none;
   }
 }
@@ -1648,7 +1683,7 @@ video {
    ========================================================================== */
 .kartu-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
   gap: var(--sp-4);
 }
 
@@ -2217,31 +2252,53 @@ video {
   gap: var(--sp-3);
 }
 
+/* Bahan kaca yang sama dengan tombol lain di aplikasi ini: permukaan padat
+   gelap, pantulan tipis di tepi atas, halo rapat di sekelilingnya, dan cincin
+   berputar saat disorot (didaftarkan di keluarga ::before bersama .btn dan
+   kawan-kawan).
+
+   Warnanya TETAP, tidak diambil dari token. Halaman profil punya panel terang
+   di beberapa tempat, dan tombol yang mengambil `--ink` akan berubah jadi teks
+   gelap di atas permukaan yang tetap gelap. */
 .profil-halaman-tombol {
   all: unset;
   box-sizing: border-box;
   cursor: pointer;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 46px;
   padding: 12px 24px;
   border-radius: var(--r-full);
+  font-family: inherit;
   font-size: 0.86rem;
   font-weight: 600;
-  color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--line-2);
-  transition: background var(--t), border-color var(--t), transform var(--t);
+  color: #f1f5f9;
+  background: linear-gradient(180deg, #1b1b1e 0%, #0a0a0c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 11px 0 rgba(226, 232, 240, 0.086),
+    0 8px 18px -10px rgba(0, 0, 0, 0.85);
+  transition:
+    transform var(--t),
+    box-shadow var(--t),
+    border-color var(--t);
 }
 
-.profil-halaman-tombol:hover {
-  background: var(--surface-3);
-  border-color: var(--focus);
+.profil-halaman-tombol:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 16px 1px rgba(226, 232, 240, 0.13),
+    0 10px 22px -10px rgba(0, 0, 0, 0.9);
 }
 
-.profil-halaman-tombol:active {
-  transform: scale(0.98);
+.profil-halaman-tombol:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .profil-halaman-tombol:focus-visible {
@@ -2252,11 +2309,22 @@ video {
 /* Keluar mengambil satu baris penuh di bawah keduanya. Ia satu-satunya yang
    membuang keadaan, dan menaruhnya sejajar dengan tautan biasa membuatnya
    mudah tertekan tanpa sengaja. */
+/* Keluar memakai bahan yang sama, hanya warnanya merah.
+   Sebelumnya ia transparan tanpa bayangan — di antara dua tombol berkaca, itu
+   terbaca seperti tombol yang belum selesai dibuat, bukan seperti tindakan yang
+   sengaja dibedakan. Yang membedakannya cukup warna teks dan tepinya. */
 .profil-halaman-tombol-keluar {
   grid-column: 1 / -1;
-  color: var(--err);
-  border-color: rgba(248, 113, 113, 0.3);
-  background: transparent;
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.34);
+}
+
+.profil-halaman-tombol-keluar:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 16px 1px rgba(248, 113, 113, 0.16),
+    0 10px 22px -10px rgba(0, 0, 0, 0.9);
 }
 
 .profil-halaman-tombol-keluar:hover {
@@ -2714,7 +2782,12 @@ video {
   height: 48px;
   flex-shrink: 0;
   border-radius: 50%;
-  color: var(--ink);
+  /* Putih tetap, BUKAN var(--ink).
+     Latar tombol ini selalu gradasi gelap, berapa pun terang latar di
+     sekelilingnya. Mengambil warna dari token membuatnya ikut membalik di dalam
+     panel terang — dan di sana `--ink` bernilai #0f172a, sehingga panahnya
+     menjadi gelap di atas tombol yang juga gelap dan praktis hilang. */
+  color: #f1f5f9;
   background: linear-gradient(180deg, #1b1b1e 0%, #0a0a0c 100%);
   border: 1px solid rgba(255, 255, 255, 0.11);
   box-shadow:
@@ -2800,12 +2873,25 @@ video {
   min-height: 0;
 }
 
-.hero-video,
-.hero-tirai {
+/* Pembungkus yang `fixed`; isinya `absolute`.
+   Elemen <video> yang langsung diberi `position: fixed` terbukti tergambar
+   sebagian saja di sebagian mesin render — kotaknya terhitung benar, tapi hanya
+   separuhnya yang terisi gambar. Memindahkan `fixed` ke div biasa dan membuat
+   videonya elemen absolut di dalamnya menghilangkan konstruksi yang rapuh itu
+   tanpa mengubah apa pun yang terlihat saat ia bekerja. */
+.hero-latar {
   position: fixed;
   inset: 0;
+  overflow: hidden;
   /* Di belakang seluruh isi halaman, tapi di atas latar body. */
   z-index: 0;
+  background: #000;
+}
+
+.hero-video,
+.hero-tirai {
+  position: absolute;
+  inset: 0;
 }
 
 /* Navbar dan isi hero sama-sama naik di atas video — tapi navbar harus di atas
@@ -2846,20 +2932,43 @@ body:has(.hero) {
   border: 0;
   border-radius: 0;
   background: transparent;
+  /* Tanpa pembesaran.
+
+     Video sekarang 16:9 persis, sama dengan monitor 16:9, jadi `cover` memetakan
+     satu banding satu — tidak ada satu piksel pun yang dibuang. Pembesaran 6%
+     yang sempat ada di sini memotong 2,8% tiap sisi untuk menutupi tepi gelap;
+     tepi itu sudah tidak ada karena potongannya diambil dari jendela paling
+     terang, jadi yang tersisa dari pembesaran cuma kerugiannya: gambar
+     dilunakkan dan bagian tepi dibuang tanpa alasan. */
 }
 
+/* Hanya tirai TEGAK, untuk menjaga kontras teks di atas video yang terang-gelap
+   berganti sepanjang pemutaran.
+
+   Sempat ada tirai mendatar di sini sebagai jaring pengaman terhadap tepi frame
+   yang gelap. Itu keliru: ia menggelapkan 14% kiri dan kanan dengan alpha 0,55
+   — di layar 1920px berarti 269px per sisi — sehingga ia BUKAN menyamarkan
+   bilah gelap, melainkan menjadi bilah gelap itu sendiri. Tepi frame sudah
+   ditangani di akarnya lewat pemotongan berkasnya, jadi jaring pengaman ini
+   tidak punya tugas selain merusak. */
 .hero-tirai {
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.28) 38%, rgba(0, 0, 0, 0.78) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.62) 0%,
+    rgba(0, 0, 0, 0.28) 38%,
+    rgba(0, 0, 0, 0.78) 100%
+  );
 }
 
 .hero-isi {
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 1280px;
+  /* Ikut melebar bersama shell. 1280px yang lama membuat judul hero berhenti
+     di tengah layar 2560px sementara videonya memenuhi seluruhnya. */
+  max-width: 1800px;
   margin: 0 auto;
-  padding: clamp(24px, 5vh, 56px) clamp(20px, 5vw, 48px);
+  padding: clamp(24px, 5vh, 56px) clamp(20px, 4vw, 88px);
   display: flex;
   flex-direction: column;
   gap: clamp(32px, 8vh, 80px);
@@ -3207,7 +3316,7 @@ body:has(.hero) {
 }
 
 .tentang-blok {
-  max-width: 60ch;
+  max-width: 62ch;
   margin-bottom: var(--sp-7);
 }
 
@@ -3277,11 +3386,15 @@ body:has(.hero) {
   margin-bottom: var(--sp-5);
 }
 
+/* Kartu langkah jadi grid mengikuti lebar layar: satu kolom di layar sempit,
+   dua atau empat di layar lebar. Sebelumnya selalu satu kolom, dan di monitor
+   2560px itu menghasilkan kartu selebar dua meter berisi dua baris teks. */
 .tentang-langkah {
   list-style: none;
   margin: 0 0 var(--sp-7);
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
   gap: var(--sp-4);
 }
 
@@ -3323,7 +3436,8 @@ body:has(.hero) {
   margin: 0 0 var(--sp-7);
   padding: 0;
   display: grid;
-  gap: var(--sp-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: var(--sp-5);
 }
 
 /* Dibedakan dari daftar langkah dengan garis di tepi kiri, bukan dengan warna
@@ -3360,7 +3474,7 @@ body:has(.hero) {
   /* `auto-fill` dengan lebar minimum, bukan jumlah kolom tetap per breakpoint.
      Jumlah kolomnya jadi urusan browser: satu di ponsel, tiga di layar lebar,
      dan apa pun yang muat di antaranya — tanpa satu pun media query. */
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: var(--sp-4);
 }
 
@@ -3484,4 +3598,697 @@ body:has(.hero) {
   .konsep-hapus {
     min-height: 44px;
   }
+}
+
+/* ==========================================================================
+   Daftar pilihan berkas — checkbox tanpa kotak saat terpilih
+   ==========================================================================
+
+   Yang membedakannya dari checkbox biasa: begitu terpilih, KOTAKNYA HILANG dan
+   yang tersisa hanya centangnya. Kotak yang tetap ada lalu diisi centang
+   membuat dua bentuk bersaing di ruang 18px; centang telanjang membaca lebih
+   cepat justru karena tidak ada yang mengelilinginya.
+   ========================================================================== */
+.pilihan-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pilihan {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: 10px 12px;
+  margin: 0;
+  border-radius: 10px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background var(--t);
+}
+
+/* Latar muncul di SELURUH baris saat disorot, bukan hanya di kotaknya. Yang
+   bisa ditekan memang seluruh barisnya — labelnya membungkus semuanya — jadi
+   penandanya harus seluas itu juga. */
+.pilihan:hover {
+  background: var(--surface-2);
+}
+
+/* Checkbox aslinya tetap ada dan tetap fokusable; ia hanya tidak terlihat.
+   Menggantinya dengan div membuang keyboard, pembaca layar, dan status
+   `:checked` sekaligus — dan ketiganya harus ditulis ulang dengan tangan. */
+.pilihan input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.pilihan-tanda {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  /* Disejajarkan dengan baris pertama teks, bukan dengan seluruh bloknya —
+     keterangan di bawah judul tidak boleh ikut menarik kotaknya ke bawah. */
+  margin-top: 2px;
+  color: #ffffff;
+}
+
+.pilihan-kotak {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  /* Putih redup, bukan warna garis biasa. `--line-2` dirancang untuk memisahkan
+     panel dari latar dan terlalu gelap untuk sebuah kontrol — kotaknya nyaris
+     tidak terlihat di daftar berkas yang latarnya juga gelap. */
+  border: 1.5px solid rgba(255, 255, 255, 0.42);
+  transition: border-color var(--t), opacity 140ms var(--ease), transform 140ms var(--ease);
+}
+
+.pilihan:hover .pilihan-kotak {
+  border-color: rgba(255, 255, 255, 0.78);
+}
+
+.pilihan-centang {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+  /* Muncul dengan digambar dari pangkal ke ujung, bukan sekadar memudar.
+     `stroke-dasharray` sepanjang garisnya, offset penuh saat tersembunyi. */
+  stroke-dasharray: 26;
+  stroke-dashoffset: 26;
+  transition: opacity 90ms linear, stroke-dashoffset 220ms var(--ease);
+}
+
+/* Terpilih: kotak menghilang, centang tergambar. */
+.pilihan input:checked ~ .pilihan-tanda .pilihan-kotak {
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+.pilihan input:checked ~ .pilihan-tanda .pilihan-centang {
+  opacity: 1;
+  stroke-dashoffset: 0;
+}
+
+/* Cincin fokus dipasang di kotaknya, bukan di seluruh baris — baris selebar
+   panel yang bercincin terbaca seperti seluruh daftarnya yang terpilih. */
+.pilihan input:focus-visible ~ .pilihan-tanda {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.pilihan input:disabled ~ .pilihan-tanda {
+  opacity: 0.4;
+}
+
+.pilihan:has(input:disabled) {
+  cursor: not-allowed;
+  color: var(--ink-4);
+}
+
+.pilihan-teks {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex: 1;
+  min-width: 0;
+}
+
+.pilihan-judul {
+  font-size: 0.86rem;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Yang terpilih dinaikkan kecerahannya. Centang saja sudah menyatakan
+   keadaannya, tapi di daftar panjang mata memindai teksnya lebih dulu. */
+.pilihan input:checked ~ .pilihan-teks .pilihan-judul {
+  color: var(--ink);
+}
+
+.pilihan-ket {
+  font-size: 0.76rem;
+  color: var(--ink-4);
+  flex-shrink: 0;
+}
+
+@media (pointer: coarse) {
+  .pilihan {
+    min-height: 44px;
+    align-items: center;
+  }
+  .pilihan-tanda {
+    margin-top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pilihan-kotak,
+  .pilihan-centang {
+    transition: opacity 90ms linear;
+  }
+  .pilihan-centang {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ==========================================================================
+   Dropdown pilihan — pengganti <select>
+   ========================================================================== */
+.dd {
+  position: relative;
+  width: 100%;
+}
+
+.dd-pemicu {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.92rem;
+  transition: border-color var(--t), background var(--t);
+}
+
+.dd-pemicu:hover:not(:disabled) {
+  border-color: var(--ink-4);
+}
+
+.dd-pemicu-terbuka {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.dd-pemicu:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.dd-pemicu:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dd-nilai {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-nilai-kosong {
+  color: var(--ink-4);
+}
+
+/* Chevron menunjuk ke arah yang akan terjadi kalau ditekan: ke bawah saat
+   tertutup, ke atas saat terbuka. */
+.dd-chevron {
+  flex-shrink: 0;
+  transition: transform 200ms var(--ease);
+}
+
+.dd-chevron-naik {
+  transform: rotate(180deg);
+}
+
+/* Panel TERANG di atas halaman gelap.
+   Kontras terbalik itu yang membuatnya terbaca sebagai lapisan yang mengambang,
+   bukan sebagai bagian dari form di bawahnya — sama seperti pil putih di navbar
+   dan tombol utama di aplikasi ini. */
+.dd-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 70;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.2),
+    0 18px 44px -14px rgb(0 0 0 / 0.6);
+  animation: dd-masuk 140ms var(--ease) both;
+}
+
+@keyframes dd-masuk {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dd-grup {
+  padding: 10px 12px 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.dd-opsi {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #0f172a;
+}
+
+/* Satu penanda sorot untuk kursor DAN keyboard. Kalau hover dan panah punya
+   tampilan berbeda, daftar yang sedang disusuri keyboard terlihat punya dua
+   baris aktif begitu kursor kebetulan lewat. */
+.dd-opsi-sorot {
+  background: rgba(15, 23, 42, 0.07);
+}
+
+.dd-opsi-terpilih .dd-opsi-judul {
+  font-weight: 600;
+}
+
+.dd-opsi-mati {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dd-opsi-judul {
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-opsi-ket {
+  flex-shrink: 0;
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+@media (pointer: coarse) {
+  .dd-opsi {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-panel { animation: none; }
+  .dd-chevron { transition: none; }
+}
+
+/* ==========================================================================
+   Radio — cincin dan titik
+   Memakai kerangka .pilihan yang sama dengan checkbox, jadi tinggi baris,
+   area sentuh, dan keadaan fokusnya identik. Yang berbeda cuma bentuk
+   penandanya: lingkaran, bukan kotak, dan titik yang muncul di tengahnya
+   alih-alih centang.
+   ========================================================================== */
+.pilihan-grup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: 12px;
+}
+
+.pilihan-radio {
+  padding: 8px 12px 8px 10px;
+}
+
+.pilihan input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.pilihan-cincin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--kontrol-garis, rgba(255, 255, 255, 0.42));
+  transition: border-color var(--t), border-width 120ms var(--ease);
+}
+
+.pilihan-radio:hover .pilihan-cincin {
+  border-color: var(--kontrol-garis-sorot, rgba(255, 255, 255, 0.78));
+}
+
+/* Titik disembunyikan dengan skala nol, bukan dengan opacity.
+   Titik yang memudar sempat terlihat sebagai lingkaran abu-abu setengah jadi
+   di tengah cincin; yang menyusut ke nol tidak pernah punya keadaan itu. */
+.pilihan-titik {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: scale(0);
+  transition: transform 150ms var(--ease);
+}
+
+.pilihan input[type="radio"]:checked ~ .pilihan-tanda .pilihan-cincin {
+  border-width: 2px;
+  border-color: currentColor;
+}
+
+.pilihan input[type="radio"]:checked ~ .pilihan-tanda .pilihan-titik {
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pilihan-titik,
+  .pilihan-cincin {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Panel terang
+   ==========================================================================
+
+   Latar putih di halaman gelap, sama seperti panel dropdown di dalamnya.
+   Kontras terbalik itu yang membuat form terbaca sebagai lembar kerja yang
+   berdiri di atas halaman, bukan sebagai bagian dari latarnya.
+
+   Membalik latar saja tidak cukup: setiap warna di dalamnya diambil dari token
+   yang dirancang untuk latar gelap. Kalau hanya latarnya yang berubah, yang
+   didapat adalah teks hampir-putih di atas putih. Karena itu tokennya sendiri
+   yang ditimpa di dalam lingkup panel — sekali, di satu tempat — dan seluruh
+   isinya ikut benar tanpa satu pun aturan tambahan per komponen.
+   ========================================================================== */
+.panel {
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --ink-3: #52627a;
+  --ink-4: #6b7a90;
+  --surface: #e5e4e2;
+  --surface-2: #dcdbd8;
+  --surface-3: #d2d1ce;
+  --line: #cfcecc;
+  --line-2: #bcbbb8;
+  --kontrol-garis: rgba(15, 23, 42, 0.36);
+  --kontrol-garis-sorot: rgba(15, 23, 42, 0.72);
+
+  /* Token status ikut dituakan, supaya apa pun di dalam panel yang memakainya
+     — bukan hanya .notice — terbaca di atas latar terang. */
+  --ok: #065f46;
+  --warn: #92400e;
+  --err: #991b1b;
+  --info: #1e40af;
+
+  /* #e5e4e2 — platinum, bukan putih murni.
+     Putih murni di halaman gelap memantul terlalu keras dan membuat tepi
+     panelnya berdengung; abu hangat ini menurunkan pantulan itu tanpa
+     kehilangan kontras terhadap teks gelap di atasnya. */
+  background: #e5e4e2;
+  border-color: #cfcecc;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 18px 44px -22px rgb(0 0 0 / 0.5);
+}
+
+/* Kolom isian di panel terang: latar sedikit lebih redup dari panelnya supaya
+   ia terbaca sebagai cekungan yang bisa diisi, bukan sebagai bidang datar. */
+.panel input[type="text"],
+.panel input[type="password"],
+.panel input[type="email"],
+.panel input[type="number"],
+.panel input[type="file"],
+.panel textarea {
+  background: #f4f3f1;
+  border-color: #c6c5c2;
+  color: var(--ink);
+}
+
+.panel input::placeholder,
+.panel textarea::placeholder {
+  color: #8a8985;
+}
+
+.panel input:focus,
+.panel textarea:focus {
+  border-color: #0f172a;
+}
+
+/* Tombol utama di dalam panel terang harus DIBALIK: gelap di atas putih.
+   `.pill` mengambil `--surface-2`, yang di sini sudah jadi abu muda — tombolnya
+   akan hampir tak terlihat. */
+.panel .pill-aksi,
+.panel .pill-aksi:hover:not(:disabled) {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.panel .pill-aksi:hover:not(:disabled) {
+  background: #1e293b;
+  border-color: #1e293b;
+}
+
+/* Penanda pilihan mewarisi `currentColor`, jadi ia otomatis jadi gelap. */
+.panel .pilihan-tanda {
+  color: #0f172a;
+}
+
+.panel .pilihan:hover {
+  background: #dcdbd8;
+}
+
+.panel .pilihan-kotak {
+  border-color: var(--kontrol-garis);
+}
+
+.panel .pilihan:hover .pilihan-kotak {
+  border-color: var(--kontrol-garis-sorot);
+}
+
+/* Pemicu dropdown ikut jadi terang; panelnya sendiri sudah terang sejak awal. */
+.panel .dd-pemicu {
+  background: #f4f3f1;
+  border-color: #c6c5c2;
+  color: var(--ink);
+}
+
+.panel .dd-pemicu-terbuka {
+  border-color: #0f172a;
+}
+
+/* Pesan status di panel terang.
+   
+   Warna teksnya di luar sini sengaja PUCAT — #a7f3d0, #fde68a, #fecaca — karena
+   dirancang menyala di atas latar gelap. Di atas platinum, pucat itu jadi
+   nyaris tak terbaca: hijau muda di atas abu muda praktis hilang. Yang dibalik
+   bukan makna warnanya, melainkan gelapnya: rona yang sama, dituakan sampai
+   ia terbaca di atas latar terang.
+   
+   Kontras terukur terhadap latar barunya: hijau 6,0:1, amber 5,6:1, merah
+   6,5:1, abu 8,1:1 — semuanya di atas ambang 4,5:1. Sebelum diperbaiki
+   ketiganya berada di 1,0-1,1:1, yaitu praktis tidak terbaca. */
+.panel .notice {
+  border-color: #cfcecc;
+}
+
+.panel .notice.ok {
+  background: rgba(6, 95, 70, 0.1);
+  color: #065f46;
+  border-color: rgba(6, 95, 70, 0.28);
+}
+
+.panel .notice.warn {
+  background: rgba(146, 64, 14, 0.1);
+  color: #92400e;
+  border-color: rgba(146, 64, 14, 0.28);
+}
+
+.panel .notice.err {
+  background: rgba(153, 27, 27, 0.09);
+  color: #991b1b;
+  border-color: rgba(153, 27, 27, 0.28);
+}
+
+.panel .notice.info {
+  background: #dcdbd8;
+  color: #334155;
+  border-color: #c6c5c2;
+}
+
+/* ==========================================================================
+   Pemuat AI — bola bercahaya dengan sorot berputar
+   ==========================================================================
+
+   Cahayanya datang dari `box-shadow` KE DALAM, bukan dari gradien latar. Itu
+   yang membuat sorotnya terlihat menempel di dinding dalam bola dan bukan
+   dicetak rata di permukaannya — dan karena bayangan dalam ikut berputar
+   bersama elemennya, satu animasi rotasi sudah cukup untuk menggerakkan
+   seluruh cahayanya.
+   ========================================================================== */
+.pemuat-ai {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--pemuat-d, 220px);
+  height: var(--pemuat-d, 220px);
+}
+
+.pemuat-ai-bola {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #0a0a0f;
+  animation: pemuat-putar 3s linear infinite;
+}
+
+@keyframes pemuat-putar {
+  0% {
+    transform: rotate(90deg);
+    box-shadow:
+      0 10px 20px 0 #fff inset,
+      0 20px 30px 0 #ad5fff inset,
+      0 60px 60px 0 #471eec inset;
+  }
+  50% {
+    transform: rotate(270deg);
+    box-shadow:
+      0 10px 20px 0 #fff inset,
+      0 20px 10px 0 #d60a47 inset,
+      0 40px 60px 0 #311e80 inset;
+  }
+  100% {
+    transform: rotate(450deg);
+    box-shadow:
+      0 10px 20px 0 #fff inset,
+      0 20px 30px 0 #ad5fff inset,
+      0 60px 60px 0 #471eec inset;
+  }
+}
+
+/* Kata TIDAK ikut berputar. Ia saudara bolanya, bukan anaknya — kalau di
+   dalamnya, rotasi 360 derajat itu ikut memutar teksnya sampai terbalik. */
+.pemuat-ai-kata {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  font-size: calc(var(--pemuat-d, 220px) * 0.105);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
+}
+
+.pemuat-ai-huruf {
+  display: inline-block;
+  opacity: 0.4;
+  animation: pemuat-huruf 3s infinite;
+}
+
+/* Denyutnya bergelombang karena tiap huruf diberi jeda mulai yang berbeda —
+   lihat `animationDelay` di komponennya. Nilai puncaknya di 20%: cukup singkat
+   supaya gelombangnya terbaca berjalan, bukan seperti seluruh kata berkedip. */
+@keyframes pemuat-huruf {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  40% {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+}
+
+/* Gerak berputar tanpa henti di elemen terbesar halaman adalah yang paling
+   sulit diabaikan. Yang tersisa: cahaya diam dan huruf yang berdenyut pelan
+   bersamaan — tetap menyatakan "sedang bekerja". */
+@media (prefers-reduced-motion: reduce) {
+  .pemuat-ai-bola {
+    animation: none;
+    box-shadow:
+      0 10px 20px 0 #fff inset,
+      0 20px 30px 0 #ad5fff inset,
+      0 60px 60px 0 #471eec inset;
+  }
+  .pemuat-ai-huruf {
+    animation: pemuat-redup 2s ease-in-out infinite;
+    animation-delay: 0s !important;
+  }
+  @keyframes pemuat-redup {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+}
+
+/* ==========================================================================
+   Halaman proses
+   ========================================================================== */
+.proses-halaman {
+  position: relative;
+  min-height: calc(100dvh - 160px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-6);
+  text-align: center;
+}
+
+/* Tombol back menempel di pojok kiri atas halaman, bukan ikut terpusat bersama
+   isinya. Ia jalan keluar — memusatkannya bersama animasi membuatnya terbaca
+   sebagai bagian dari proses yang sedang berjalan. */
+.proses-kembali {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.proses-judul {
+  font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.proses-tahap {
+  font-size: 0.85rem;
+  color: var(--ink-3);
+}
+
+.proses-bilah {
+  width: 100%;
+  max-width: 420px;
+}
+
+.proses-catatan {
+  max-width: 46ch;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--ink-4);
 }

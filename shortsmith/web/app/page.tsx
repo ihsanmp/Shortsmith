@@ -28,11 +28,27 @@ import { sesiSekarang } from "@/lib/akun";
  * berkas itu dihapus, latar dashboard ini ikut mati tanpa ada yang bisa
  * dilakukan dari sini.
  *
- * Berkasnya juga dikecilkan lebih dulu: 1924px 7,08 MB menjadi 1600px 0,93 MB.
- * Ia hiasan di balik tirai gelap — resolusi penuh tidak menambah apa pun yang
- * terlihat, sementara 7 MB per kunjungan sangat terasa.
+ * Seluruh frame aslinya, dipotong tipis saja ke 16:9 (1924x1076 -> 1912x1076),
+ * dan TIDAK diperbesar sama sekali.
+ *
+ * Sempat dicoba memotong lebih sempit ke bagian yang paling terang, karena
+ * video ini gelap. Itu keliru arah: makin sempit potongannya makin sedikit
+ * piksel nyata yang tersisa untuk direntangkan ke layar. Terukur di monitor
+ * 2560px:
+ *
+ *     potongan 1052px  -> terang 51,8  dibesarkan 2,43x   (terlihat pecah)
+ *     potongan 1440px  -> terang 40,5  dibesarkan 1,78x
+ *     frame penuh      -> terang 27,2  dibesarkan 1,34x
+ *
+ * Gelapnya adalah sifat videonya, bukan sesuatu yang bisa dipotong hilang —
+ * dan menukar ketajaman untuk itu ternyata terlihat jauh lebih buruk daripada
+ * gelapnya sendiri.
+ *
+ * Encode-nya di resolusi potongan itu sendiri. Membesarkan saat encode tidak
+ * menambah satu pun detail; ia hanya menaruh piksel karangan ke dalam berkas,
+ * lalu browser merentangnya lagi.
  */
-const VIDEO = "/hero-dashboard.mp4";
+const VIDEO = "/hero-1912x1076.mp4";
 
 /**
  * Versi potret untuk layar sempit.
@@ -45,7 +61,7 @@ const VIDEO = "/hero-dashboard.mp4";
  * diskalakan ke 720x1280. Karena potongannya sudah seukuran layarnya, `cover`
  * nyaris tidak membuang apa pun.
  */
-const VIDEO_POTRET = "/hero-dashboard-potret.mp4";
+const VIDEO_POTRET = "/hero-720x1280.mp4";
 
 function Panah() {
   return (
@@ -83,6 +99,17 @@ export default async function Dashboard() {
         `aria-hidden` karena isinya hiasan: tidak ada informasi di dalamnya yang
         tidak sudah tertulis sebagai teks di atasnya.
       */}
+      {/* Video dibungkus div berposisi `fixed`, dan videonya sendiri `absolute`
+          di dalamnya.
+
+          Sebelumnya elemen <video> yang langsung diberi `position: fixed`.
+          Ukurannya terhitung benar — 2000x1015, inset 0, cover, termuat penuh —
+          tapi yang tergambar hanya sebagian kotaknya, sisanya hitam dengan tepi
+          lurus. Itu ciri glitch penggabungan lapisan GPU, bukan kesalahan tata
+          letak, dan elemen media berposisi `fixed` adalah pemicunya yang paling
+          dikenal. Pembungkus yang `fixed` dengan media `absolute` di dalamnya
+          adalah bentuk yang jauh lebih tahan di seluruh mesin render. */}
+      <div className="hero-latar" aria-hidden>
       <video
         className="hero-video"
         autoPlay
@@ -90,7 +117,6 @@ export default async function Dashboard() {
         muted
         playsInline
         preload="metadata"
-        aria-hidden
       >
         {/* Urutannya penting: browser memakai `source` PERTAMA yang media
             query-nya cocok, jadi yang paling sempit harus di atas. Pemilihannya
@@ -100,10 +126,11 @@ export default async function Dashboard() {
         <source src={VIDEO_POTRET} media="(max-width: 640px)" type="video/mp4" />
         <source src={VIDEO} type="video/mp4" />
       </video>
-      {/* Tirai gelap di atas video. Video bergerak punya bagian terang dan
-          gelap yang berganti terus; tanpa tirai, kontras teks berubah-ubah
-          sepanjang pemutaran dan ada detik-detik yang tidak terbaca. */}
-      <div className="hero-tirai" aria-hidden />
+        {/* Tirai gelap di atas video. Video bergerak punya bagian terang dan
+            gelap yang berganti terus; tanpa tirai, kontras teks berubah-ubah
+            sepanjang pemutaran dan ada detik-detik yang tidak terbaca. */}
+        <div className="hero-tirai" />
+      </div>
 
       <div className="hero-isi">
         <div className="hero-atas">

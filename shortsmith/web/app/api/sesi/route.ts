@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { conceptProfiles, projects, users } from "@/db/schema";
 import { COOKIE_NAME, bacaIsiSesi } from "@/lib/session";
 import { sentuhSesi } from "@/lib/akun";
+import { presignDownload } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,14 +41,28 @@ export async function GET() {
   // tamu tidak punya, dan itu ditampilkan apa adanya — bukan diisi tebakan.
   let email: string | null = null;
   let username: string | null = null;
+  let avatarUrl: string | null = null;
   if (isi?.userId) {
     const [akun] = await db
-      .select({ email: users.email, username: users.username })
+      .select({
+        email: users.email,
+        username: users.username,
+        avatarKey: users.avatarKey,
+      })
       .from(users)
       .where(eq(users.id, isi.userId))
       .limit(1);
     email = akun?.email ?? null;
     username = akun?.username ?? null;
+
+    // Foto disimpan di bucket privat, jadi tiap tampilan butuh URL bertanda
+    // tangan yang baru. Kegagalan menandatanganinya tidak boleh menjatuhkan
+    // rute ini — yang hilang cuma fotonya, dan avatar bawaan menggantikannya.
+    if (akun?.avatarKey) {
+      try {
+        avatarUrl = await presignDownload(akun.avatarKey);
+      } catch {}
+    }
   }
 
   // "Terakhir aktif" diperbarui DI SINI, bukan saat halaman dirender. Rute ini
@@ -63,6 +78,7 @@ export async function GET() {
     peran: isi?.peran ?? "pemilik",
     email,
     username,
+    avatarUrl,
     jumlahProject,
     jumlahKonsep,
   });

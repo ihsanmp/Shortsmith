@@ -1,10 +1,10 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Konfirmasi } from "@/components/ui/konfirmasi";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { Memuat } from "@/components/ui/memuat";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
 
 type Status = "pending" | "processing" | "done" | "failed";
@@ -26,6 +26,7 @@ type Data = {
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [data, setData] = useState<Data | null>(null);
   const [hapusBusy, setHapusBusy] = useState(false);
   const [tanyaHapus, setTanyaHapus] = useState(false);
@@ -57,6 +58,17 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       clearTimeout(timer);
     };
   }, [id]);
+
+  // Selama render berjalan, tempatnya bukan di sini.
+  //
+  // `replace`, bukan `push`: halaman ini dan halaman proses tidak boleh saling
+  // menumpuk di riwayat, kalau tidak menekan Back akan memantul di antara
+  // keduanya selama render belum selesai.
+  useEffect(() => {
+    if (data?.job?.status === "processing") {
+      router.replace(`/project/${id}/proses`);
+    }
+  }, [data?.job?.status, id, router]);
 
   if (error) return <div className="notice err">{error}</div>;
   if (!data) return <div className="empty">Memuat...</div>;
@@ -109,28 +121,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         </div>
       )}
 
-      {job && job.status === "processing" && (
-        <div className="panel proses" style={{ marginBottom: 20 }}>
-          {/* Bentuk yang bermetamorfosis dipasang BERSAMA bilah progres, bukan
-              menggantikannya. Keduanya menjawab pertanyaan yang berbeda: bilah
-              menyatakan sudah sejauh mana, bentuknya menyatakan masih hidup.
-              Bilah yang berhenti di 40% selama dua menit — hal yang wajar
-              terjadi saat render — terlihat seperti macet tanpa penanda kedua. */}
-          <Memuat label="" size={52} />
-          <div className="stack">
-            <ProgressBar
-              value={job.progress > 0 ? job.progress : null}
-              label={job.tahap || "Memproses"}
-              pendingLabel="Menyiapkan"
-              completeLabel="Render selesai"
-            />
-            <span className="hint">
-              Perkiraan total 10-15 menit. Halaman ini memperbarui sendiri — tidak perlu
-              ditunggu.
-            </span>
-          </div>
-        </div>
-      )}
 
       {job && job.status === "failed" && (
         <div className="notice err" style={{ marginBottom: 20 }}>

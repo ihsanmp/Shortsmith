@@ -6,6 +6,7 @@ import { uploadFile } from "@/lib/upload";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Memuat } from "@/components/ui/memuat";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
+import { Dropdown } from "@/components/ui/dropdown";
 
 type Concept = { id: string; nama: string; siap: boolean; isDefault: boolean };
 type Sumber = "pustaka" | "unggah";
@@ -286,28 +287,38 @@ export default function NewProjectPage() {
       <form onSubmit={submit} className="panel stack">
         <div>
           <label>Asal bahan mentah</label>
-          <div className="row" style={{ gap: 20, marginBottom: 12 }}>
-            <label style={{ marginBottom: 0, fontWeight: 400, cursor: "pointer" }}>
+          <div className="pilihan-grup">
+<label className="pilihan pilihan-radio">
               <input
                 type="radio"
                 name="asal"
                 checked={asal === "lokal"}
                 disabled={busy}
-                style={{ width: "auto", marginRight: 8 }}
                 onChange={() => setAsal("lokal")}
               />
-              Ambil dari folder PC
+              <span className="pilihan-tanda" aria-hidden>
+                <span className="pilihan-cincin" />
+                <span className="pilihan-titik" />
+              </span>
+              <span className="pilihan-teks">
+                <span className="pilihan-judul">Ambil dari folder PC</span>
+              </span>
             </label>
-            <label style={{ marginBottom: 0, fontWeight: 400, cursor: "pointer" }}>
+<label className="pilihan pilihan-radio">
               <input
                 type="radio"
                 name="asal"
                 checked={asal === "unggah"}
                 disabled={busy}
-                style={{ width: "auto", marginRight: 8 }}
                 onChange={() => setAsal("unggah")}
               />
-              Unggah ke storage
+              <span className="pilihan-tanda" aria-hidden>
+                <span className="pilihan-cincin" />
+                <span className="pilihan-titik" />
+              </span>
+              <span className="pilihan-teks">
+                <span className="pilihan-judul">Unggah ke storage</span>
+              </span>
             </label>
           </div>
 
@@ -347,28 +358,30 @@ export default function NewProjectPage() {
                 </div>
 
                 <label htmlFor="pilih-suara">Rekaman suara (satu file)</label>
-                <select
+                <Dropdown
                   id="pilih-suara"
-                  value={pilihSuara ? kunci(pilihSuara) : ""}
+                  nilai={pilihSuara ? kunci(pilihSuara) : ""}
+                  placeholder="— pilih berkas —"
                   disabled={busy || kelompok.length === 0}
-                  onChange={(e) => {
+                  opsi={kelompok.flatMap((g) =>
+                    g.berkas.map((b) => ({
+                      nilai: `${g.path}/${b.nama}`,
+                      judul: b.nama,
+                      // Ukuran naik ke baris kedua, bukan diselipkan dalam
+                      // kurung di judulnya. Di daftar berkas, ukuran adalah
+                      // yang dibandingkan antar baris — ia perlu berdiri di
+                      // kolomnya sendiri supaya bisa dipindai menurun.
+                      ket: `${(b.ukuranBytes / 1e6).toFixed(0)} MB`,
+                      grup: g.path || "(folder utama)",
+                    })),
+                  )}
+                  onPilih={(v) => {
                     const semua = kelompok.flatMap((g) =>
                       g.berkas.map((b) => ({ ...b, folder: g.path })),
                     );
-                    setPilihSuara(semua.find((b) => kunci(b) === e.target.value) ?? null);
+                    setPilihSuara(semua.find((b) => kunci(b) === v) ?? null);
                   }}
-                >
-                  <option value="">&mdash; pilih berkas &mdash;</option>
-                  {kelompok.map((g) => (
-                    <optgroup key={g.path} label={g.path || "(folder utama)"}>
-                      {g.berkas.map((b) => (
-                        <option key={b.nama} value={`${g.path}/${b.nama}`}>
-                          {b.nama} ({(b.ukuranBytes / 1e6).toFixed(0)} MB)
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                />
                 <p className="hint" style={{ marginTop: 6 }}>
                   Seluruh audio video hasil diambil dari file ini saja, dan agent memilih
                   satu topik utuh dari dalamnya. Hanya file ini yang ditranskrip.
@@ -383,40 +396,49 @@ export default function NewProjectPage() {
                       <p className="hint mono" style={{ marginBottom: 4 }}>
                         {g.path || "(folder utama)"}
                       </p>
-                      <div className="list" style={{ gap: 6 }}>
+                      <div className="pilihan-daftar">
                         {g.berkas.map((b) => {
                           const item = { ...b, folder: g.path };
                           const dipilih = pilihKlip.some((x) => kunci(x) === kunci(item));
                           return (
-                            <label
-                              key={b.nama}
-                              className="row"
-                              style={{
-                                justifyContent: "space-between",
-                                gap: 12,
-                                marginBottom: 0,
-                                fontWeight: 400,
-                                cursor: "pointer",
-                              }}
-                            >
-                              <span className="hint" style={{ display: "flex", gap: 8 }}>
-                                <input
-                                  type="checkbox"
-                                  checked={dipilih}
-                                  disabled={busy}
-                                  style={{ width: "auto" }}
-                                  onChange={() =>
-                                    setPilihKlip((p) =>
-                                      dipilih
-                                        ? p.filter((x) => kunci(x) !== kunci(item))
-                                        : [...p, item],
-                                    )
-                                  }
-                                />
-                                {b.nama}
+                            <label key={b.nama} className="pilihan">
+                              <input
+                                type="checkbox"
+                                checked={dipilih}
+                                disabled={busy}
+                                onChange={() =>
+                                  setPilihKlip((p) =>
+                                    dipilih
+                                      ? p.filter((x) => kunci(x) !== kunci(item))
+                                      : [...p, item],
+                                  )
+                                }
+                              />
+                              {/* Kotak dan centang adalah DUA elemen, bukan satu yang
+                                  berubah isi. Saat terpilih, kotaknya benar-benar
+                                  hilang dan yang tersisa hanya centangnya — itulah
+                                  perbedaan pokok dari checkbox biasa, dan menumpuk
+                                  keduanya di satu elemen membuat sisa bingkai masih
+                                  terlihat di balik centang. */}
+                              <span className="pilihan-tanda" aria-hidden>
+                                <span className="pilihan-kotak" />
+                                <svg
+                                  className="pilihan-centang"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.6"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+                                </svg>
                               </span>
-                              <span className="hint">
-                                {(b.ukuranBytes / 1e6).toFixed(0)} MB
+                              <span className="pilihan-teks">
+                                <span className="pilihan-judul">{b.nama}</span>
+                                <span className="pilihan-ket">
+                                  {(b.ukuranBytes / 1e6).toFixed(0)} MB
+                                </span>
                               </span>
                             </label>
                           );
@@ -492,28 +514,38 @@ export default function NewProjectPage() {
         <div>
           <label>Konsep</label>
 
-          <div className="row" style={{ gap: 20, marginBottom: 12 }}>
-            <label style={{ marginBottom: 0, fontWeight: 400, cursor: "pointer" }}>
+          <div className="pilihan-grup">
+<label className="pilihan pilihan-radio">
               <input
                 type="radio"
                 name="sumber"
                 checked={sumber === "pustaka"}
                 disabled={busy || (konsepDimuat && !konsepGagal && concepts.length === 0)}
-                style={{ width: "auto", marginRight: 8 }}
                 onChange={() => setSumber("pustaka")}
               />
-              Pilih dari pustaka
+              <span className="pilihan-tanda" aria-hidden>
+                <span className="pilihan-cincin" />
+                <span className="pilihan-titik" />
+              </span>
+              <span className="pilihan-teks">
+                <span className="pilihan-judul">Pilih dari pustaka</span>
+              </span>
             </label>
-            <label style={{ marginBottom: 0, fontWeight: 400, cursor: "pointer" }}>
+            <label className="pilihan pilihan-radio">
               <input
                 type="radio"
                 name="sumber"
                 checked={sumber === "unggah"}
                 disabled={busy}
-                style={{ width: "auto", marginRight: 8 }}
                 onChange={() => setSumber("unggah")}
               />
-              Kirim video contoh
+              <span className="pilihan-tanda" aria-hidden>
+                <span className="pilihan-cincin" />
+                <span className="pilihan-titik" />
+              </span>
+              <span className="pilihan-teks">
+                <span className="pilihan-judul">Kirim video contoh</span>
+              </span>
             </label>
           </div>
 
@@ -541,17 +573,13 @@ export default function NewProjectPage() {
                 membuat yang pertama.
               </div>
             ) : (
-              <select
-                value={conceptId}
+              <Dropdown
+                nilai={conceptId}
                 disabled={busy}
-                onChange={(e) => setConceptId(e.target.value)}
-              >
-                {concepts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nama}
-                  </option>
-                ))}
-              </select>
+                placeholder="— pilih konsep —"
+                opsi={concepts.map((c) => ({ nilai: c.id, judul: c.nama }))}
+                onPilih={setConceptId}
+              />
             )
           ) : (
             <div className="stack" style={{ gap: 12 }}>
@@ -593,18 +621,13 @@ export default function NewProjectPage() {
 
               <div>
                 <label htmlFor="rasio">Rasio video hasil</label>
-                <select
+                <Dropdown
                   id="rasio"
-                  value={rasio}
+                  nilai={rasio}
                   disabled={busy}
-                  onChange={(e) => setRasio(e.target.value)}
-                >
-                  {RASIO.map((r) => (
-                    <option key={r.v} value={r.v}>
-                      {r.t}
-                    </option>
-                  ))}
-                </select>
+                  opsi={RASIO.map((r) => ({ nilai: r.v, judul: r.t }))}
+                  onPilih={setRasio}
+                />
                 <p className="hint" style={{ marginTop: 6 }}>
                   Gambar sumber dipotong dari tengah agar pas. Bisa diubah kapan saja
                   lewat halaman Konsep.

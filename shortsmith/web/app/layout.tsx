@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 
 import { COOKIE_NAME, bacaIsiSesi } from "@/lib/session";
+import { akunSekarang } from "@/lib/akun";
 
 import "./globals.css";
 import { NavUtama } from "./nav-utama";
@@ -20,6 +21,19 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // keduanya tidak bisa berbeda pendapat.
   const tamu = !sesi || sesi.peran === "tamu";
 
+  // Nama dan foto disiapkan DI SERVER, bukan diambil menu profil belakangan.
+  //
+  // Avatar kecil di navbar terlihat sejak halaman muncul, sementara isi menunya
+  // baru diambil saat dibuka. Kalau keduanya mengandalkan pengambilan yang
+  // sama, avatarnya menampilkan gambar bawaan sampai seseorang membuka menu —
+  // dan bagi yang baru saja mengunggah foto, itu terbaca seperti unggahannya
+  // gagal.
+  //
+  // Ongkosnya satu pembacaan berindeks per render halaman. Itu jauh lebih murah
+  // daripada tulisan yang dulu ada di sini, dan ia hanya berjalan untuk sesi
+  // yang memang punya akun.
+  const akun = tamu ? null : await akunSekarang(sesi);
+
   return (
     <html lang="id">
       <body>
@@ -36,7 +50,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               <NavUtama tamu={tamu} />
             </div>
             <div className="nav-kanan">
-              <MenuProfil />
+              <MenuProfil
+                awalUsername={akun?.username ?? null}
+                awalAvatarUrl={akun?.avatarUrl ?? null}
+              />
             </div>
           </nav>
           {children}

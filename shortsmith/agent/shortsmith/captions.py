@@ -35,6 +35,11 @@ log = logging.getLogger(__name__)
 LEAD = 0.10
 
 
+# Berapa bagian sebuah kata harus terdengar sebelum ia layak diberi caption.
+# Lihat alasan pemilihan angkanya di dalam derive_captions().
+AMBANG_TERDENGAR = 0.6
+
+
 def derive_captions(
     cuts: list[Cut],
     words: list[Word] | dict[int, list[Word]],
@@ -60,20 +65,34 @@ def derive_captions(
     for cut in cuts:
         # Kata yang jatuh di dalam rentang potongan ini, dari video asalnya saja.
         sumber_words = per_sumber.get(cut.sumber, [])
-        # Syaratnya kata harus UTUH di dalam potongan, bukan sekadar mulainya.
+
+        # Syaratnya SEBERAPA BANYAK kata itu terdengar, bukan apakah ia utuh.
         #
-        # Dengan `w.start < cut.out` saja, kata yang mulai tepat sebelum ujung
-        # potongan ikut tampil padahal audionya terpotong di tengah — terukur 18
-        # kejadian dalam satu render. Penonton MELIHAT kata yang tidak sepenuhnya
-        # ia DENGAR, dan itu terbaca sebagai caption yang tidak sinkron.
-        inside = [
-            w for w in sumber_words
-            if w.start >= cut.in_ and w.end <= cut.out + 0.02
-        ]
+        # Aturan sebelumnya menuntut kata berada seluruhnya di dalam potongan.
+        # Itu benar untuk kata yang terbelah di UJUNG potongan — hanya pangkalnya
+        # yang terdengar, dan menampilkannya membuat penonton melihat kata yang
+        # tidak ia dengar. Tapi aturan yang sama ikut membuang kata yang terbelah
+        # di AWAL potongan, padahal di sana justru sebagian besarnya terdengar.
+        #
+        # Terukur pada satu render: 'banyak' 68% terdengar dan 'lu' 70%, dua-duanya
+        # hilang dari caption meski jelas terdengar; sementara 'lu' 30% dan
+        # 'contoh,' 28% memang pantas disembunyikan. Ambang 60% memisahkan
+        # keduanya dengan jarak lebar, bukan menebak di tengah-tengah.
+        inside = []
+        for w in sumber_words:
+            terdengar = min(w.end, cut.out + 0.02) - max(w.start, cut.in_)
+            panjang = w.end - w.start
+            if panjang <= 0 or terdengar <= 0:
+                continue
+            if terdengar / panjang >= AMBANG_TERDENGAR:
+                inside.append(w)
 
         for i in range(0, len(inside), max_kata):
             chunk = inside[i : i + max_kata]
-            start_src = chunk[0].start
+            # Dijepit ke dalam potongan di KEDUA ujungnya. Kata yang pangkalnya
+            # berada sebelum potongan ini dimulai tidak boleh menghasilkan waktu
+            # negatif, dan durasinya harus sepanjang yang benar-benar terdengar.
+            start_src = max(chunk[0].start, cut.in_)
             end_src = min(chunk[-1].end, cut.out)
             if end_src <= start_src:
                 continue

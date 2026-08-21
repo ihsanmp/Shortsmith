@@ -48,6 +48,7 @@ type Sesi = {
   peran: "pemilik" | "tamu";
   email: string | null;
   username: string | null;
+  avatarUrl: string | null;
   jumlahProject: number;
   jumlahKonsep: number;
 };
@@ -97,7 +98,14 @@ type Item = {
   pisah?: boolean;
 };
 
-export function MenuProfil() {
+export function MenuProfil({
+  awalUsername = null,
+  awalAvatarUrl = null,
+}: {
+  /** Disiapkan server supaya avatar di navbar benar sejak halaman muncul. */
+  awalUsername?: string | null;
+  awalAvatarUrl?: string | null;
+} = {}) {
   const [terbuka, setTerbuka] = useState(false);
   const [sesi, setSesi] = useState<Sesi | null>(null);
   const [gagal, setGagal] = useState(false);
@@ -123,7 +131,14 @@ export function MenuProfil() {
   function alihkan() {
     const baru = !terbuka;
     setTerbuka(baru);
-    if (baru && !sesi) void muat();
+    // Diambil ulang SETIAP kali dibuka, bukan sekali lalu disimpan.
+    //
+    // Nama dan foto bisa berubah dari halaman edit profil, dan menu ini hidup
+    // di layout — ia tidak pernah dilepas saat berpindah halaman, jadi nilai
+    // yang disimpan sekali akan bertahan basi sampai seluruh tab dimuat ulang.
+    // Satu permintaan kecil saat menu dibuka jauh lebih murah daripada
+    // menampilkan nama lama kepada orang yang baru saja menggantinya.
+    if (baru) void muat();
   }
 
   useEffect(() => {
@@ -186,7 +201,7 @@ export function MenuProfil() {
   // dikenali pemiliknya daripada alamat email — dan emailnya tetap ada persis
   // di bawahnya untuk menjawab "akun yang mana", pertanyaan yang muncul begitu
   // ada lebih dari satu.
-  const judul = sesi?.username ?? (tamu ? "Tamu" : "Pemilik");
+  const judul = sesi?.username ?? awalUsername ?? (tamu ? "Tamu" : "Pemilik");
 
   const angka = sesi
     ? (sesi.email ?? `${sesi.jumlahProject} project · ${sesi.jumlahKonsep} konsep`)
@@ -205,9 +220,14 @@ export function MenuProfil() {
         aria-label={terbuka ? "Tutup menu profil" : "Buka menu profil"}
         onClick={alihkan}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- data URI; tidak
-            ada yang bisa dioptimalkan next/image di sini. */}
-        <img src={AVATAR} alt="" className="profil-avatar" />
+        {/* eslint-disable-next-line @next/next/no-img-element -- URL bertanda
+            tangan berumur pendek, atau data URI; keduanya tidak bisa
+            dioptimalkan next/image. */}
+        <img
+          src={sesi?.avatarUrl || awalAvatarUrl || AVATAR}
+          alt=""
+          className="profil-avatar"
+        />
         <svg
           className={`profil-panah${terbuka ? " profil-panah-naik" : ""}`}
           viewBox="0 0 24 24"
@@ -249,7 +269,11 @@ export function MenuProfil() {
             <div className="profil-kepala">
               <a href="/profile" className="profil-kepala-tautan" role="menuitem">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={AVATAR} alt="" className="profil-avatar-besar" />
+                <img
+                  src={sesi?.avatarUrl || awalAvatarUrl || AVATAR}
+                  alt=""
+                  className="profil-avatar-besar"
+                />
                 <span className="profil-kepala-teks">
                   <span className="profil-judul">{judul}</span>
                   <span className="profil-sub">{angka}</span>

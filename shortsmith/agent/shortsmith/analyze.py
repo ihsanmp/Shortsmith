@@ -80,11 +80,13 @@ def detect_silence(
     return gaps
 
 
-def transcribe(path: str | Path) -> tuple[list[TranscriptSegment], list[Word]]:
+def transcribe(
+    path: str | Path, backend: str | None = None
+) -> tuple[list[TranscriptSegment], list[Word]]:
     """Transkrip lewat backend yang dipilih (lihat shortsmith/asr.py)."""
     from .asr import transcribe as _transcribe
 
-    segments, words = _transcribe(path)
+    segments, words = _transcribe(path, backend)
     log.info("transkrip: %d segmen, %d kata", len(segments), len(words))
     return segments, words
 
@@ -93,6 +95,19 @@ def transcribe(path: str | Path) -> tuple[list[TranscriptSegment], list[Word]]:
 # flash, atau salah deteksi. Memakainya sebagai slot akan menghasilkan gambar
 # yang berkelebat sebelum sempat terbaca.
 ADEGAN_MIN = 0.8
+
+# Berapa banyak adegan yang dibawa ke tahap pelabelan.
+#
+# Batas ini soal ongkos, dan ongkosnya terukur. Satu rekaman podcast 61 menit
+# menghasilkan 916 adegan; tiap adegan dilabeli satu panggilan model, dan
+# seluruhnya memakan hampir dua jam plus 916 panggilan berbayar — untuk video
+# keluaran 72 detik yang hanya memakai 15 potongan.
+#
+# 150 dipilih karena `penata` dilarang memakai satu klip dua kali, jadi yang
+# benar-benar dibutuhkan adalah SEBANYAK slotnya. Video terpanjang yang wajar
+# di sini berkisar 15-20 slot; 150 memberi sekitar sepuluh pilihan untuk tiap
+# slot, dan pilihan ke-sebelas tidak pernah mengubah keputusan.
+MAKS_ADEGAN = 150
 
 
 # Bilah hitam yang lebih tipis dari ini diabaikan: beda beberapa piksel biasanya
@@ -416,6 +431,8 @@ def pecah_adegan(path: str | Path) -> list[Adegan]:
     if dipecah:
         log.info("%d adegan dipecah lagi karena bilahnya berubah di tengah", dipecah)
 
+    hasil = _ringkas(hasil)
+
     berbilah = sum(1 for a in hasil if a.crop)
     berwajah = sum(1 for a in hasil if a.fokus_x is not None)
     log.info(
@@ -426,8 +443,45 @@ def pecah_adegan(path: str | Path) -> list[Adegan]:
     return hasil
 
 
+def _ringkas(adegan: list[Adegan]) -> list[Adegan]:
+    """Kurangi jumlah adegan ke MAKS_ADEGAN, merata sepanjang durasi.
+
+    ## Kenapa disebar merata, bukan diambil yang pertama
+
+    Mengambil 150 pertama dari sebuah rekaman satu jam berarti seluruh pustaka
+    B-roll datang dari sepuluh menit pembuka. Video keluarannya lalu terlihat
+    seperti dirangkai dari satu bagian saja, dan lima puluh menit sisanya tidak
+    pernah punya kesempatan muncul.
+
+    ## Kenapa bukan yang terpanjang
+
+    Adegan terpanjang adalah adegan yang paling lama tidak berubah — kamera diam
+    pada pembicara yang sedang bicara. Memilih menurut panjang akan mengisi
+    pustaka dengan gambar yang paling tidak bergerak, yaitu justru yang paling
+    tidak berguna sebagai B-roll.
+
+    Jarak tetap di sepanjang daftar mempertahankan sebaran waktunya, dan daftar
+    ini memang sudah urut waktu karena dibangun dari hasil deteksi adegan.
+    """
+    if len(adegan) <= MAKS_ADEGAN:
+        return adegan
+
+    langkah = len(adegan) / MAKS_ADEGAN
+    dipilih = [adegan[int(i * langkah)] for i in range(MAKS_ADEGAN)]
+    log.info(
+        "adegan diringkas: %d -> %d, disebar merata sepanjang durasi "
+        "(pelabelan %d panggilan lebih sedikit)",
+        len(adegan), len(dipilih), (len(adegan) - len(dipilih) + 7) // 8,
+    )
+    return dipilih
+
+
 def build_map(
-    path: str | Path, *, skip_transcript: bool = False, broll: bool = False
+    path: str | Path,
+    *,
+    skip_transcript: bool = False,
+    broll: bool = False,
+    asr_backend: str | None = None,
 ) -> VideoMap:
     """Rakit VideoMap untuk satu video mentah.
 
@@ -485,7 +539,7 @@ def build_map(
 
         silences = detect_silence(path)
         if not skip_transcript:
-            segments, words = transcribe(path)
+            segments, words = transcribe(path, asr_backend)
     else:
         log.warning("tidak ada track audio — melewati transkrip dan deteksi hening")
 

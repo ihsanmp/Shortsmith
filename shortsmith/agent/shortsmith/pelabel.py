@@ -28,7 +28,9 @@ import json
 import logging
 import shutil
 import subprocess
+import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .config import SETTINGS
@@ -41,6 +43,21 @@ log = logging.getLogger(__name__)
 # mendominasi; terlalu banyak membuat model kehilangan jejak nomor gambarnya
 # dan mulai tertukar antar label.
 PER_KELOMPOK = 8
+
+# Berapa kelompok dikerjakan berbarengan.
+#
+# Tiap kelompok adalah satu proses `claude -p` yang menunggu jawaban dari
+# jaringan — jadi waktunya habis untuk MENUNGGU, bukan untuk menghitung.
+# Menjalankannya berurutan membiarkan mesin menganggur hampir sepanjang waktu.
+#
+# Terukur pada satu job nyata: 916 adegan menjadi 115 kelompok, tiap kelompok
+# sekitar 59 detik, seluruhnya berderet — sekitar 1 jam 54 menit untuk pekerjaan
+# yang sebagian besarnya adalah diam.
+#
+# Empat, bukan lebih: tiap panggilan menagih kuota model yang sama, dan
+# menaikkannya terlalu tinggi menukar antrean di sini dengan penolakan karena
+# terlalu sering meminta.
+PARALEL = max(1, int(os.environ.get("SHORTSMITH_LABEL_PARALEL", "4")))
 
 # Lebar frame yang dikirim. Label yang diminta hanya beberapa kata, jadi detail
 # halus tidak menambah apa pun selain waktu unggah.
@@ -130,30 +147,55 @@ def labeli(adegan: list[Adegan]) -> int:
     terisi = 0
     tmp = Path(tempfile.mkdtemp(prefix="shortsmith-label-"))
 
+    def satu_kelompok(mulai: int) -> int:
+        """Labeli satu kelompok. Kembalikan berapa yang terisi.
+
+        Dijalankan dari beberapa thread sekaligus. Tidak ada state yang dibagi:
+        nama berkas frame memakai `mulai` sehingga unik antar kelompok, dan tiap
+        pemanggilan hanya menyentuh objek Adegan miliknya sendiri.
+        """
+        kelompok = perlu[mulai : mulai + PER_KELOMPOK]
+        berkas: list[tuple[int, Path]] = []
+        for n, a in enumerate(kelompok, start=1):
+            f = tmp / f"f{mulai + n:04d}.jpg"
+            if _tulis_frame(a, f):
+                berkas.append((n, f))
+
+        if not berkas:
+            return 0
+
+        try:
+            hasil = _minta_label(berkas)
+        except (PelabelError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
+            log.warning("pelabel gagal untuk satu kelompok (%s) — dilewati", exc)
+            return 0
+
+        n_isi = 0
+        for n, _ in berkas:
+            if n in hasil:
+                kelompok[n - 1].label = hasil[n]
+                n_isi += 1
+        return n_isi
+
     try:
-        for mulai in range(0, len(perlu), PER_KELOMPOK):
-            kelompok = perlu[mulai : mulai + PER_KELOMPOK]
-            berkas: list[tuple[int, Path]] = []
-            for n, a in enumerate(kelompok, start=1):
-                p = tmp / f"f{mulai + n:04d}.jpg"
-                if _tulis_frame(a, p):
-                    berkas.append((n, p))
-
-            if not berkas:
-                continue
-
-            try:
-                hasil = _minta_label(berkas)
-            except (PelabelError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
-                log.warning("pelabel gagal untuk satu kelompok (%s) — dilewati", exc)
-                continue
-
-            for n, _ in berkas:
-                if n in hasil:
-                    kelompok[n - 1].label = hasil[n]
-                    terisi += 1
-
-            log.info("pelabel: %d/%d selesai", min(mulai + PER_KELOMPOK, len(perlu)), len(perlu))
+        awal = list(range(0, len(perlu), PER_KELOMPOK))
+        log.info(
+            "pelabel: %d kelompok, %d dikerjakan berbarengan", len(awal), PARALEL
+        )
+        selesai = 0
+        with ThreadPoolExecutor(max_workers=PARALEL) as pool:
+            for n_isi in pool.map(satu_kelompok, awal):
+                terisi += n_isi
+                selesai += 1
+                # Dihitung per kelompok SELESAI, bukan per indeks awal: dengan
+                # beberapa thread, urutan selesainya tidak sama dengan urutan
+                # mulainya, dan melaporkan indeks awal membuat angkanya
+                # melompat-lompat mundur.
+                if selesai % 5 == 0 or selesai == len(awal):
+                    log.info(
+                        "pelabel: %d/%d kelompok selesai (%d adegan berlabel)",
+                        selesai, len(awal), terisi,
+                    )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

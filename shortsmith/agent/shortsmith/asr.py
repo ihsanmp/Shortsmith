@@ -217,8 +217,63 @@ _BACKENDS = {
 }
 
 
-def transcribe(path: str | Path) -> tuple[list[TranscriptSegment], list[Word]]:
-    backend = SETTINGS.asr_backend.lower()
+def backend_untuk(gaya_caption: str, ada_caption: bool) -> str:
+    """Backend mana yang dipakai untuk konsep dengan gaya caption ini.
+
+    ## faster-whisper adalah bawaan, dan itu hasil pengukuran
+
+    Dugaan yang wajar adalah GPU lebih cepat daripada CPU. Pada Intel Core Ultra
+    7 155H dengan Arc iGPU, dugaan itu terbalik — terukur pada potongan audio
+    60 detik yang sama, masing-masing dua kali::
+
+        faster-whisper (CPU)   17,7 detik    3,39x realtime
+        openvino (Arc iGPU)    22,4 detik    2,59x realtime
+
+    CTranslate2 int8 di CPU modern sangat efisien, dan iGPU kelas ini tidak
+    mengejarnya. Jadi openvino di sini BUKAN percepatan; ia harus diminta
+    sengaja, bukan dipilih diam-diam karena kebetulan modelnya ada.
+
+    ## Yang tetap dijaga: caption kata-per-kata tidak boleh kena openvino
+
+    openvino hanya mengembalikan timestamp per potongan; waktu tiap kata
+    diinterpolasi, dan presisinya turun dari ~50ms ke ~150ms. Caption
+    kata-per-kata menampilkan SATU kata pada satu waktu — meleset 150ms berarti
+    kata muncul setelah ia selesai diucapkan, dan itu seluruh isi fiturnya.
+
+    Jadi penjagaan ini menolak openvino untuk gaya itu bahkan ketika diminta
+    lewat environment. Kalau seseorang mesti melanggarnya untuk menguji sesuatu,
+    yang benar adalah mengganti gaya caption konsepnya — bukan diam-diam
+    merusak caption yang sudah dipilih pengguna.
+    """
+    import os
+
+    diminta = os.environ.get("ASR_BACKEND", "").strip().lower()
+    if not diminta:
+        return "faster-whisper"
+
+    if diminta == "openvino" and ada_caption and gaya_caption == "kata-per-kata":
+        log.warning(
+            "ASR_BACKEND=openvino diabaikan: konsep ini memakai caption "
+            "kata-per-kata, yang butuh waktu kata sungguhan. Memakai "
+            "faster-whisper."
+        )
+        return "faster-whisper"
+
+    if diminta == "openvino" and not SETTINGS.ov_model_dir.exists():
+        log.warning(
+            "ASR_BACKEND=openvino diabaikan: model tidak ada di %s. "
+            "Jalankan `shortsmith prepare-model`. Memakai faster-whisper.",
+            SETTINGS.ov_model_dir,
+        )
+        return "faster-whisper"
+
+    return diminta
+
+
+def transcribe(
+    path: str | Path, backend: str | None = None
+) -> tuple[list[TranscriptSegment], list[Word]]:
+    backend = (backend or SETTINGS.asr_backend).lower()
     fn = _BACKENDS.get(backend)
     if fn is None:
         raise RuntimeError(

@@ -183,6 +183,21 @@ def run(
         vmap = ProjectMap.model_validate_json(map_file.read_text(encoding="utf-8"))
     else:
         log.info("[1/5] menganalisis %d video mentah", len(paths))
+
+        # Backend transkrip dipilih dari gaya caption konsep INI, bukan dari
+        # satu setelan global. Alasannya ada di `asr.backend_untuk`: caption
+        # kata-per-kata hidup atau mati oleh presisi waktu kata, sedangkan
+        # caption frasa tidak merasakannya sama sekali — jadi satu jawaban untuk
+        # keduanya pasti salah di salah satu sisi.
+        from .asr import backend_untuk
+
+        asr_backend = backend_untuk(profile.caption.gaya, profile.caption.ada)
+        log.info(
+            "backend transkrip: %s (caption %s)",
+            asr_backend,
+            profile.caption.gaya if profile.caption.ada else "dimatikan",
+        )
+
         videos: list[VideoMap] = []
         for i, path in enumerate(paths):
             # Cache per video: menambah video baru tidak memaksa transkrip ulang
@@ -213,7 +228,7 @@ def run(
             # menit dan sekantong token untuk jawaban yang sudah pernah didapat.
             v = None if refresh else cache_peta.ambil(path, broll=broll)
             if v is None:
-                v = build_map(path, broll=broll)
+                v = build_map(path, broll=broll, asr_backend=asr_backend)
                 cache_peta.simpan(path, v, broll=broll)
             _write_json(per_file, v)
             videos.append(v)
@@ -308,6 +323,15 @@ def run(
         for i, c in enumerate(edl.cuts, 1):
             log.info("      %2d. [%-8s] vid%d %6.2f-%6.2f (%4.1fs)  %s",
                      i, c.role.value, c.sumber, c.in_, c.out, c.durasi, c.alasan)
+
+    # Perataan eksposur sebelum EDL ditulis, supaya keputusannya ikut tersimpan
+    # di edl.json dan bisa diperiksa — sama seperti keputusan potongan lainnya.
+    from .warna import ratakan_edl
+
+    lapor(66, "meratakan warna")
+    n_warna = ratakan_edl(edl)
+    if n_warna:
+        log.info("[4/5] warna: %d potongan diratakan eksposurnya", n_warna)
 
     _write_json(edl_file, edl)
     log.info(

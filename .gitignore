@@ -62,3 +62,7 @@ Thumbs.db
 # dan totalnya di bawah 1,5 MB.
 !shortsmith/web/public/hero-dashboard.mp4
 !shortsmith/web/public/hero-dashboard-potret.mp4
+
+# Log daemon (dibuat Start-Process saat menyalakan agent)
+shortsmith/agent/daemon.out
+shortsmith/agent/daemon.err

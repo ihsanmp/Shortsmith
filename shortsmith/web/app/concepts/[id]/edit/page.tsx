@@ -2,6 +2,7 @@
 import { TombolKembali } from "@/components/ui/tombol-kembali";
 
 import { use, useEffect, useState } from "react";
+import { galatDari } from "@/lib/galat";
 
 /**
  * Editor profil sebagai form biasa.
@@ -60,18 +61,6 @@ type Concept = {
   profileJson: Profile;
 };
 
-/**
- * Gabungkan `error` dengan `detail` dari API.
- *
- * Tanpa ini, kegagalan validasi hanya muncul sebagai "Body tidak valid" —
- * benar, tapi tidak bisa ditindaklanjuti. Detail dari Zod menyebut field mana
- * yang ditolak dan kenapa, dan itulah satu-satunya bagian yang berguna saat
- * sesuatu tiba-tiba berhenti bekerja.
- */
-function pesanError(d: { error?: string; detail?: string }, bawaan: string): string {
-  const utama = d?.error ?? bawaan;
-  return d?.detail ? `${utama} — ${d.detail}` : utama;
-}
 
 export default function EditConceptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -122,7 +111,7 @@ export default function EditConceptPage({ params }: { params: Promise<{ id: stri
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ nama, isDefault, profileJson: { ...profile, nama } }),
       });
-      if (!res.ok) throw new Error(pesanError(await res.json(), "Gagal menyimpan"));
+      if (!res.ok) throw new Error(await galatDari(res, "Gagal menyimpan"));
       setPesan("Tersimpan.");
     } catch (err) {
       setError((err as Error).message);
@@ -135,8 +124,12 @@ export default function EditConceptPage({ params }: { params: Promise<{ id: stri
     setBusy(true);
     try {
       const res = await fetch(`/api/concepts/${id}`, { method: "POST" });
+      // Status diperiksa SEBELUM badannya diurai. Urutan sebaliknya membuat
+      // respons non-JSON melempar SyntaxError sebelum sempat sampai ke
+      // pemeriksaan ini, sehingga kegagalan server terbaca sebagai kesalahan
+      // penguraian di browser.
+      if (!res.ok) throw new Error(await galatDari(res, "Gagal menduplikat"));
       const d = await res.json();
-      if (!res.ok) throw new Error(pesanError(d, "Gagal menduplikat"));
       window.location.href = `/concepts/${d.concept.id}/edit`;
     } catch (err) {
       setError((err as Error).message);

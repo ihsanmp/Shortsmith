@@ -4,22 +4,11 @@ import { TombolKembali } from "@/components/ui/tombol-kembali";
 import { useState } from "react";
 
 import { uploadFile } from "@/lib/upload";
+import { galatDari } from "@/lib/galat";
 
 const MIN_SAMPEL = 2;
 const MAX_SAMPEL = 4;
 
-/**
- * Gabungkan `error` dengan `detail` dari API.
- *
- * Tanpa ini, kegagalan validasi hanya muncul sebagai "Body tidak valid" —
- * benar, tapi tidak bisa ditindaklanjuti. Detail dari Zod menyebut field mana
- * yang ditolak dan kenapa, dan itulah satu-satunya bagian yang berguna saat
- * sesuatu tiba-tiba berhenti bekerja.
- */
-function pesanError(d: { error?: string; detail?: string }, bawaan: string): string {
-  const utama = d?.error ?? bawaan;
-  return d?.detail ? `${utama} — ${d.detail}` : utama;
-}
 
 export default function NewConceptPage() {
   const [nama, setNama] = useState("");
@@ -57,7 +46,7 @@ export default function NewConceptPage() {
         }),
       });
 
-      if (!res.ok) throw new Error(pesanError(await res.json(), "Gagal membuat konsep"));
+      if (!res.ok) throw new Error(await galatDari(res, "Gagal membuat konsep"));
       window.location.href = "/concepts";
     } catch (err) {
       setError((err as Error).message);

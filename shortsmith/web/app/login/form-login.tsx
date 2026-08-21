@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { galatDari } from "@/lib/galat";
 
 /**
  * Form masuk: akun email, pendaftaran, dan mode tamu.
@@ -89,7 +90,7 @@ export function FormLogin({ onBatal }: { onBatal: () => void }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: emailBersih, password }),
       });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Gagal masuk");
+      if (!res.ok) throw new Error(await galatDari(res, "Gagal masuk"));
 
       try {
         localStorage.setItem(KUNCI_EMAIL, emailBersih);
@@ -111,7 +112,7 @@ export function FormLogin({ onBatal }: { onBatal: () => void }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ tamu: true }),
       });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Gagal masuk");
+      if (!res.ok) throw new Error(await galatDari(res, "Gagal masuk"));
       window.location.href = params.get("next") || "/";
     } catch (err) {
       setError((err as Error).message);

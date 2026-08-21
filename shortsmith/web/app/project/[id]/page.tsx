@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Konfirmasi } from "@/components/ui/konfirmasi";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
+import { galatDari } from "@/lib/galat";
 
 type Status = "pending" | "processing" | "done" | "failed";
 
@@ -39,7 +40,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     async function poll() {
       try {
         const res = await fetch(`/api/projects/${id}`, { cache: "no-store" });
-        if (!res.ok) throw new Error((await res.json()).error ?? "Gagal memuat");
+        if (!res.ok) throw new Error(await galatDari(res, "Gagal memuat"));
         const d: Data = await res.json();
         if (!alive) return;
         setData(d);

@@ -356,32 +356,63 @@ class Daemon:
         def progress(persen: int, tahap: str) -> None:
             hb.update(persen, tahap)
 
-        hasil = run_pipeline(
+        from .pipeline import run_banyak
+
+        klip = run_banyak(
             sources,
             profile,
             output,
+            jenis=jenis,
             brief=job.get("brief", ""),
             job_id=job["id"],
             music=musik,
             music_gain_db=gain_musik(jenis),
             on_progress=progress,
         )
-        if hasil is None:
+        if not klip:
             raise RuntimeError("Pipeline tidak menghasilkan file.")
 
-        salinan = self._simpan_hasil(hasil, job)
+        for k in klip:
+            self._simpan_hasil(k, job)
 
         hb.update(92, "mengunggah hasil")
-        target = job["output"]
-        self.api.upload(hasil, target["uploadUrl"])
 
-        info = probe(hasil)
-        return {
+        # Klip pertama memakai slot unggah yang sudah disertakan job. Sisanya
+        # meminta slot sendiri satu per satu -- saat job dibagikan, belum ada
+        # yang tahu berapa klip yang akan lahir darinya.
+        target = job["output"]
+        self.api.upload(klip[0], target["uploadUrl"])
+        utama = probe(klip[0])
+        ringkas = {
             "outputKey": target["key"],
-            "namaFile": hasil.name,
-            "ukuranBytes": hasil.stat().st_size,
-            "durasi": round(info.durasi, 3),
+            "namaFile": klip[0].name,
+            "ukuranBytes": klip[0].stat().st_size,
+            "durasi": round(utama.durasi, 3),
         }
+
+        tambahan = []
+        for i, k in enumerate(klip[1:], start=2):
+            try:
+                slot = self.api.slot_output(job["id"])
+                self.api.upload(k, slot["uploadUrl"])
+                info = probe(k)
+                tambahan.append({
+                    "outputKey": slot["key"],
+                    "namaFile": k.name,
+                    "ukuranBytes": k.stat().st_size,
+                    "durasi": round(info.durasi, 3),
+                })
+            except Exception as exc:  # noqa: BLE001
+                # Klip yang gagal diunggah TIDAK menggagalkan laporan. Klip
+                # pertama sudah naik dan sudah bernilai; menggagalkan seluruh
+                # job karena klip keempat berarti pengguna kehilangan semuanya,
+                # dan job diulang dari nol termasuk transkrip satu jam itu.
+                log.warning("klip %d gagal diunggah (%s) — dilewati", i, exc)
+
+        if tambahan:
+            ringkas["klipTambahan"] = tambahan
+            log.info("%d klip diunggah (1 utama + %d tambahan)", len(tambahan) + 1, len(tambahan))
+        return ringkas
 
     def _lapor_folder(self) -> bool:
         payload = self._kumpulkan_folder()

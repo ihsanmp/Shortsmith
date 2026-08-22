@@ -76,6 +76,17 @@ class ApiClient:
         res.raise_for_status()
         return res.json().get("tugas")
 
+    def slot_output(self, job_id: str) -> dict[str, Any]:
+        """Minta satu slot unggah tambahan untuk job render ini.
+
+        Dipakai saat satu job menghasilkan lebih dari satu klip. Agent tetap
+        tidak pernah memegang kredensial storage: ia meminta, server yang
+        menandatangani -- aturan yang sama dengan seluruh jalur lain.
+        """
+        res = self.session.post(f"{self.base_url}/api/jobs/{job_id}/output", timeout=30)
+        res.raise_for_status()
+        return res.json()
+
     def lapor_tugas(
         self, tugas_id: str, *, hasil: Any = None, error: str = ""
     ) -> bool:

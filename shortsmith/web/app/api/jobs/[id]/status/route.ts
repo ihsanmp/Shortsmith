@@ -27,6 +27,25 @@ const Body = z.object({
   namaFile: z.string().max(255).optional(),
   ukuranBytes: z.number().int().positive().optional(),
   durasi: z.number().positive().optional(),
+  /**
+   * Klip TAMBAHAN, kalau job ini menghasilkan lebih dari satu.
+   *
+   * Terpisah dari `outputKey`, bukan menggantikannya: agent versi lama hanya
+   * mengirim `outputKey`, dan server yang menuntut bentuk baru akan menolak
+   * seluruh laporannya -- job yang rendernya sudah selesai jadi gagal karena
+   * bentuk pesan, bukan karena pekerjaannya.
+   */
+  klipTambahan: z
+    .array(
+      z.object({
+        outputKey: z.string().min(1),
+        namaFile: z.string().max(255).optional(),
+        ukuranBytes: z.number().int().positive().optional(),
+        durasi: z.number().positive().optional(),
+      }),
+    )
+    .max(8)
+    .optional(),
   /** Job profile_extraction: profil hasil analisis video contoh. */
   profileJson: z.record(z.unknown()).optional(),
 });
@@ -51,14 +70,31 @@ export async function POST(request: Request, { params }: Params) {
 
   if (body.status === "done") {
     if (job.tipe === "render" && body.outputKey && job.projectId) {
-      await db.insert(assets).values({
-        projectId: job.projectId,
-        jenis: "output",
-        storageKey: body.outputKey,
-        namaFile: body.namaFile || (body.outputKey.split("/").pop() ?? "output.mp4"),
-        ukuranBytes: body.ukuranBytes,
-        durasi: body.durasi != null ? String(body.durasi) : null,
-      });
+      // Klip utama dan klip tambahan disisipkan sebagai baris yang SAMA
+      // bentuknya. `urutan` menjaga nomornya stabil: tanpa itu halaman project
+      // mengurutkannya lewat created_at yang identik untuk satu batch insert,
+      // dan penentu akhirnya jatuh ke UUID acak -- nomor klip akan berubah tiap
+      // kali halaman dimuat.
+      const semua = [
+        {
+          outputKey: body.outputKey,
+          namaFile: body.namaFile,
+          ukuranBytes: body.ukuranBytes,
+          durasi: body.durasi,
+        },
+        ...(body.klipTambahan ?? []),
+      ];
+      await db.insert(assets).values(
+        semua.map((k, i) => ({
+          projectId: job.projectId!,
+          jenis: "output" as const,
+          urutan: i,
+          storageKey: k.outputKey,
+          namaFile: k.namaFile || (k.outputKey.split("/").pop() ?? "output.mp4"),
+          ukuranBytes: k.ukuranBytes,
+          durasi: k.durasi != null ? String(k.durasi) : null,
+        })),
+      );
     }
 
     if (job.tipe === "profile_extraction" && body.profileJson && job.conceptId) {

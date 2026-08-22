@@ -43,14 +43,29 @@ export async function GET(_request: Request, { params }: Params) {
     .orderBy(desc(jobs.createdAt))
     .limit(1);
 
-  const [output] = await db
+  // Satu project bisa punya beberapa hasil.
+  //
+  // Saat topiknya dikosongkan, satu rekaman panjang dipecah jadi beberapa klip
+  // dari bagian yang berbeda. Diurutkan menurut `urutan`, bukan `created_at`:
+  // semuanya disisipkan dalam satu batch sehingga waktunya identik, dan
+  // penentu akhirnya jatuh ke UUID acak -- nomor klip akan berubah tiap kali
+  // halaman dimuat.
+  const keluaran = await db
     .select()
     .from(assets)
     .where(and(eq(assets.projectId, id), eq(assets.jenis, "output")))
-    .orderBy(desc(assets.createdAt))
-    .limit(1);
+    .orderBy(assets.urutan, desc(assets.createdAt));
 
-  const outputUrl = output ? await presignDownload(output.storageKey) : null;
+  const semuaOutput = await Promise.all(
+    keluaran.map(async (o) => ({
+      url: await presignDownload(o.storageKey),
+      namaFile: o.namaFile,
+      ukuranBytes: o.ukuranBytes,
+      durasi: o.durasi != null ? Number(o.durasi) : null,
+    })),
+  );
+  const output = keluaran[0];
+  const outputUrl = semuaOutput[0]?.url ?? null;
 
   // Estimasi kasar: satu PC hanya bisa memproses satu job pada satu waktu.
   const posisi = job && job.status === "pending" ? await queuePosition(job.id) : 0;
@@ -70,9 +85,12 @@ export async function GET(_request: Request, { params }: Params) {
           estimasiMenit: posisi * 12,
         }
       : null,
+    // `output` dipertahankan apa adanya supaya klien lama tetap jalan; yang
+    // baru membaca `semuaOutput`.
     output: outputUrl
       ? { url: outputUrl, namaFile: output.namaFile, ukuranBytes: output.ukuranBytes }
       : null,
+    semuaOutput,
   });
 }
 

@@ -23,6 +23,15 @@ type Data = {
     estimasiMenit: number;
   } | null;
   output: { url: string; namaFile: string; ukuranBytes: number | null } | null;
+  /**
+   * Semua hasil project ini. Saat topik dikosongkan, satu rekaman panjang
+   * dipecah jadi beberapa klip dari bagian yang berbeda.
+   *
+   * Opsional supaya halaman ini tetap jalan terhadap respons lama yang belum
+   * memuatnya -- yang terjadi kalau halaman dimuat dari cache sementara server
+   * sudah diperbarui, atau sebaliknya.
+   */
+  semuaOutput?: { url: string; namaFile: string; ukuranBytes: number | null; durasi: number | null }[];
 };
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -75,6 +84,22 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   if (!data) return <div className="empty">Memuat...</div>;
 
   const { project, job, output } = data;
+  // Jatuh kembali ke `output` tunggal kalau daftar belum ada.
+  //
+  // Tipenya dinyatakan eksplisit, bukan disimpulkan dari gabungan dua bentuk:
+  // `output` tidak punya `durasi`, dan gabungan keduanya membuat kompilator
+  // menganggap field itu tidak ada di salah satu cabang.
+  type Klip = {
+    url: string;
+    namaFile: string;
+    ukuranBytes: number | null;
+    durasi?: number | null;
+  };
+  const klip: Klip[] = data.semuaOutput?.length
+    ? data.semuaOutput
+    : output
+      ? [output]
+      : [];
 
   async function hapus() {
     setHapusBusy(true);
@@ -131,18 +156,38 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         </div>
       )}
 
-      {output && (
+      {klip.length > 0 && (
         <div className="panel stack" style={{ marginBottom: 20 }}>
-          <h2 className="section">Hasil</h2>
-          <video src={output.url} controls playsInline />
-          <div className="row">
-            <a className="pill pill-aksi" href={output.url} download={output.namaFile}>
-              Unduh
-            </a>
-            {output.ukuranBytes && (
-              <span className="hint">{(output.ukuranBytes / 1e6).toFixed(1)} MB</span>
-            )}
-          </div>
+          <h2 className="section">
+            {klip.length > 1 ? `${klip.length} klip` : "Hasil"}
+          </h2>
+          {klip.length > 1 && (
+            <p className="hint">
+              Topiknya dikosongkan, jadi rekaman ini dipecah jadi beberapa klip
+              dari bagian yang berbeda.
+            </p>
+          )}
+          {klip.map((k, i) => (
+            <div key={k.url} className="stack">
+              {/* Nomor hanya muncul kalau memang ada lebih dari satu. Menomori
+                  satu-satunya klip menyiratkan ada klip lain yang hilang. */}
+              {klip.length > 1 && (
+                <p className="hint mono" style={{ marginBottom: 0 }}>
+                  Klip {i + 1}
+                  {k.durasi ? ` — ${Math.round(k.durasi)} detik` : ""}
+                </p>
+              )}
+              <video src={k.url} controls playsInline />
+              <div className="row">
+                <a className="pill pill-aksi" href={k.url} download={k.namaFile}>
+                  Unduh
+                </a>
+                {k.ukuranBytes && (
+                  <span className="hint">{(k.ukuranBytes / 1e6).toFixed(1)} MB</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

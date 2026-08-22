@@ -139,6 +139,95 @@ def build_edl(
     )
 
 
+def run_banyak(
+    sources,
+    profile,
+    output,
+    *,
+    jenis: str = "short",
+    brief: str = "",
+    job_id: str | None = None,
+    on_progress=None,
+    **kw,
+) -> list[Path]:
+    """Jalankan pipeline, menghasilkan BEBERAPA klip kalau topiknya dikosongkan.
+
+    ## Kenapa klip pertama dijalankan lebih dulu, bukan semua sekaligus
+
+    Topik hanya bisa dicari setelah ada transkrip, dan transkrip baru ada
+    setelah tahap analisis berjalan. Menjalankan klip pertama seperti biasa
+    memberi keduanya sekaligus: satu video yang sudah jadi, dan peta video yang
+    dipakai untuk mencari topik sisanya.
+
+    Konsekuensinya klip pertama memakai pilihan model sendiri tanpa arahan --
+    persis perilaku sebelum fitur ini ada. Yang bertambah adalah klip-klip
+    setelahnya.
+
+    ## Kenapa ringkasan klip pertama ikut dikirim
+
+    Supaya topik yang dicari BERBEDA darinya. Tanpa itu, model kemungkinan besar
+    memilih bagian terbaik rekaman untuk klip kedua juga -- bagian yang sama
+    yang baru saja dipakai.
+    """
+    import json as _json
+
+    from .topik import boleh_dipecah, cari_topik, jumlah_klip
+
+    output = Path(output).resolve()
+    pertama = run(
+        sources, profile, output,
+        brief=brief, job_id=job_id, on_progress=on_progress, **kw,
+    )
+    if pertama is None or not boleh_dipecah(jenis, brief):
+        return [pertama] if pertama else []
+
+    work = SETTINGS.ensure_work_dir(
+        job_id or f"{Path(str(sources[0] if isinstance(sources, list) else sources)).stem}"
+    )
+    peta = work / "map.json"
+    if not peta.exists():
+        return [pertama]
+
+    vmap = ProjectMap.model_validate_json(peta.read_text(encoding="utf-8"))
+    durasi = max((v.media.durasi for v in vmap.videos), default=0.0)
+    n = jumlah_klip(durasi)
+    if n <= 1:
+        return [pertama]
+
+    sudah = ""
+    rencana = work / "plan.json"
+    if rencana.exists():
+        try:
+            sudah = _json.loads(rencana.read_text(encoding="utf-8")).get("ringkasan") or ""
+        except Exception:  # noqa: BLE001
+            sudah = ""
+
+    topik = cari_topik(vmap, profile, n - 1, sudah_dipakai=sudah)
+    if not topik:
+        return [pertama]
+
+    hasil = [pertama]
+    for i, t in enumerate(topik, start=2):
+        keluar = output.with_name(f"{output.stem}-{i}{output.suffix}")
+        log.info("=== klip %d dari %d: %s", i, len(topik) + 1, t[:90])
+        try:
+            # Kegagalan satu klip TIDAK menggagalkan sisanya. Klip pertama sudah
+            # jadi dan sudah bernilai; membuang semuanya karena klip keempat
+            # gagal berarti pengguna tidak mendapat apa pun.
+            k = run(
+                sources, profile, keluar,
+                brief=t, job_id=job_id, sufiks=f"_{i}",
+                on_progress=on_progress, **kw,
+            )
+            if k:
+                hasil.append(k)
+        except Exception:  # noqa: BLE001
+            log.exception("klip %d gagal — dilewati", i)
+
+    log.info("%d klip dihasilkan dari satu rekaman", len(hasil))
+    return hasil
+
+
 def run(
     sources: str | Path | list[str | Path],
     profile: ConceptProfile,
@@ -151,6 +240,7 @@ def run(
     renderer_name: str | None = None,
     refresh: bool = False,
     dry_run: bool = False,
+    sufiks: str = "",
     on_progress: Callable[[int, str], None] | None = None,
 ) -> Path | None:
     """Jalankan pipeline penuh. Kembalikan path hasil, atau None kalau dry_run.
@@ -174,8 +264,15 @@ def run(
     work = SETTINGS.ensure_work_dir(job_id)
 
     map_file = work / "map.json"
-    plan_file = work / "plan.json"
-    edl_file = work / "edl.json"
+    # Rencana dan EDL diberi akhiran, petanya TIDAK.
+    #
+    # Inilah yang membuat beberapa klip dari satu rekaman jadi murah: analisis
+    # (transkrip, deteksi adegan, pelabelan) adalah bagian yang makan puluhan
+    # menit, dan ia bergantung pada BERKAS-nya saja -- bukan pada topik yang
+    # dipilih. Dengan peta yang dipakai bersama dan rencana yang terpisah, klip
+    # kedua dan seterusnya hanya membayar perencanaan dan render.
+    plan_file = work / f"plan{sufiks}.json"
+    edl_file = work / f"edl{sufiks}.json"
 
     # --- Tahap 1-2: analisis (di-cache) ---
     if map_file.exists() and not refresh:

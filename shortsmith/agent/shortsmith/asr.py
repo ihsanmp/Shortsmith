@@ -116,6 +116,12 @@ def _transcribe_faster_whisper(path: str | Path) -> tuple[list[TranscriptSegment
     raw_segments, info = model.transcribe(
         str(path),
         language=SETTINGS.whisper_language or None,
+        # Eksplisit, menyamakan dengan jalur openvino yang sudah menyatakannya.
+        # Ini memang sudah bawaan faster-whisper dan terukur tidak mengubah apa
+        # pun -- tapi "transcribe" lawan "translate" adalah perbedaan antara
+        # transkrip dan terjemahan, dan itu terlalu penting untuk dibiarkan
+        # bergantung pada nilai bawaan pustaka pihak ketiga.
+        task="transcribe",
         word_timestamps=True,
         vad_filter=True,
     )
@@ -131,7 +137,45 @@ def _transcribe_faster_whisper(path: str | Path) -> tuple[list[TranscriptSegment
             wt = (w.word or "").strip()
             if wt and w.end > w.start:
                 words.append(Word(start=w.start, end=w.end, text=wt))
-    return segments, words
+
+    # Perbaiki rentang yang terlanjur berpindah bahasa jadi terjemahan.
+    #
+    # Whisper bisa terbalik ke bahasa Inggris di tengah rekaman panjang dan
+    # tidak pernah kembali, walau `language` sudah ditetapkan. Alasan lengkapnya
+    # beserta tiga setelan yang dicoba dan ditolak ada di shortsmith/bahasa.py.
+    from .bahasa import perbaiki
+
+    def _ulang(berkas):
+        """Transkrip satu potongan pendek dengan konteks yang benar-benar baru.
+
+        `condition_on_previous_text=False` di SINI, bukan di panggilan utama.
+        Pada rekaman penuh setelan itu terukur memperburuk (30% menyimpang lawan
+        0%), karena konteks Indonesia justru yang menahannya. Pada potongan
+        pendek yang berdiri sendiri, tidak ada konteks yang perlu ditahan --
+        yang ada justru konteks Inggris dari potongan sebelumnya, dan itulah
+        yang harus diputus.
+        """
+        s2, _ = model.transcribe(
+            str(berkas),
+            language=SETTINGS.whisper_language or None,
+            task="transcribe",
+            word_timestamps=True,
+            vad_filter=True,
+            condition_on_previous_text=False,
+        )
+        seg2: list[TranscriptSegment] = []
+        kata2: list[Word] = []
+        for g in s2:
+            t = (g.text or "").strip()
+            if t:
+                seg2.append(TranscriptSegment(start=g.start, end=g.end, text=t))
+            for w in g.words or []:
+                wt = (w.word or "").strip()
+                if wt and w.end > w.start:
+                    kata2.append(Word(start=w.start, end=w.end, text=wt))
+        return seg2, kata2
+
+    return perbaiki(path, segments, words, SETTINGS.whisper_language, _ulang)
 
 
 # --------------------------------------------------------------------------

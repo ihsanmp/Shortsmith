@@ -34,7 +34,6 @@ REM selalu keluar, dan daemon TIDAK PERNAH menyala.
 REM
 REM Terbukti saat diuji: pola '*POLA-XYZ*' yang mustahil cocok pun
 REM mengembalikan dua kecocokan.
-%SystemRoot%\System32\WindowsPowerShell
 %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "if (Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'python.exe' -and $_.CommandLine -like '*shortsmith.cli daemon*' }) { exit 1 } else { exit 0 }"
 
 REM Dibandingkan PERSIS dengan 1, bukan `if errorlevel 1`.

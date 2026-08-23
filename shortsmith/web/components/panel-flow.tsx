@@ -33,7 +33,7 @@ import { galatDari } from "@/lib/galat";
  * hal yang normal, bukan sebagai halaman yang menggantung.
  */
 
-export type JenisVideo = "short" | "cinematic" | "amv" | "podcast";
+export type JenisVideo = "short" | "cinematic" | "podcast";
 
 type Penilaian = {
   nama: string;
@@ -68,8 +68,8 @@ type Kartu = {
  *
  * Dibatasi ke podcast dulu atas permintaan. Yang lain belum dinilai apakah
  * klip hasil generate memang menolong di sana — untuk short, yang dijual
- * adalah orang yang bicara; untuk AMV dan cinematic, gayanya justru yang
- * paling sulit ditiru model video.
+ * adalah orang yang bicara; untuk cinematic, gayanya justru yang paling sulit
+ * ditiru model video.
  */
 const JENIS_DIDUKUNG: JenisVideo[] = ["podcast"];
 

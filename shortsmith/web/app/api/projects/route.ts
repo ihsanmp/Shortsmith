@@ -24,12 +24,12 @@ const CreateBody = z
     judul: z.string().max(200).default("Tanpa judul"),
     brief: z.string().max(4000).default(""),
     // Jenis video yang dituju. Menentukan rasio, durasi target, dan subtitle.
-    jenis: z.enum(["short", "cinematic", "amv", "podcast"]).default("short"),
+    jenis: z.enum(["short", "cinematic", "podcast"]).default("short"),
     // Rasio keluaran pilihan pengguna. "auto" = serahkan pada jenis dan konsep.
     rasio: z
       .enum(["auto", "9:16", "16:9", "1:1", "4:5", "3:4"])
       .default("auto"),
-    // Lagu latar, opsional — kecuali untuk AMV, yang diperiksa di bawah.
+    // Lagu latar, selalu opsional.
     musik: z
       .object({
         key: z.string().default(""),
@@ -180,16 +180,7 @@ export async function POST(request: Request) {
     conceptId = concept.id;
   }
 
-  // AMV tanpa lagu tidak masuk akal: lagunya yang jadi jalur utama, bukan
-  // latar. Diperiksa di sini, bukan hanya di form — form bisa dilewati, rute
-  // ini tidak.
-  if (body.jenis === "amv" && !body.musik) {
-    return Response.json(
-      { error: "AMV membutuhkan lagu. Pilih berkas audionya lebih dulu." },
-      { status: 400 },
-    );
-  }
-
+  
   const [project] = await db
     .insert(projects)
     .values({

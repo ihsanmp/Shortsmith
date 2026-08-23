@@ -11,20 +11,21 @@ dihasilkan di sini cuma mengisi kekurangan. Alasannya bukan selera:
   - Bahan asli gratis dan sudah ada di disk. Tiap klip yang dihasilkan di sini
     menagih akun Google pengguna.
 
-Yang benar-benar tertolong adalah AMV dan cinematic — dua jenis yang menurut
+Yang benar-benar tertolong adalah cinematic — satu-satunya jenis yang menurut
 ukuran contoh pengguna memang tanpa ucapan sama sekali.
 
 ## Yang harus diketahui sebelum memakainya
 
 Veo membatasi keluarannya pada dua rasio saja, 16:9 dan 9:16, sedangkan
-Shortsmith menerima rasio apa pun — salah satu contoh AMV yang dikirim pengguna
-justru 3:4. Jadi rasio di sini dipilih yang TERDEKAT, dan sisanya diserahkan ke
-crop yang memang sudah dilakukan renderer untuk semua bahan lain. Bukan
+Shortsmith menerima rasio apa pun — contoh cinematic yang dikirim pengguna
+berkisar dari 9:16 potret sampai 16:9 lanskap. Jadi rasio di sini dipilih
+yang TERDEKAT, dan sisanya diserahkan ke crop yang memang sudah dilakukan
+renderer untuk semua bahan lain. Bukan
 kompromi baru: bahan rekaman pun tidak pernah datang dalam rasio keluaran.
 
 Panjangnya juga dibatasi 4, 6, atau 8 detik. Itu ternyata cukup: shot cinematic
-pada contoh yang diukur rata-rata 1,9-2,1 detik dan AMV 0,33 detik, jadi satu
-klip 8 detik memuat sekitar empat shot cinematic atau dua puluhan shot AMV.
+pada contoh yang diukur rata-rata 1,9-2,1 detik, jadi satu klip 8 detik memuat
+sekitar empat shot.
 
 ## Kunci API
 

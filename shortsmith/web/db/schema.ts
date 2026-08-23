@@ -29,7 +29,12 @@ export const assetKind = pgEnum("asset_kind", ["raw", "sample", "output", "music
  * dibakar — tiga hal yang memang sudah bisa dikendalikan pipeline. Yang belum
  * dikendalikannya adalah gaya potongannya sendiri; itu tetap datang dari konsep.
  */
-export const videoJenis = pgEnum("video_jenis", ["short", "cinematic", "amv", "podcast"]);
+// AMV pernah ada di sini dan dibuang: ia satu-satunya jenis yang digerakkan
+// lagu dan bukan ucapan, dan program ini tidak lagi mengeditnya. Nilainya ikut
+// dicabut dari enum Postgres lewat scripts/migrasi-hapus-amv.ts -- bukan
+// sekadar dari daftar ini -- supaya tidak ada yang bisa menuliskannya kembali
+// lewat jalur lain.
+export const videoJenis = pgEnum("video_jenis", ["short", "cinematic", "podcast"]);
 
 /**
  * Permintaan kecil ke agent yang BUKAN render.

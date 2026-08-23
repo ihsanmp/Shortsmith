@@ -383,7 +383,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pp.add_argument("jumlah", type=int, help="Berapa klip dibuat")
     pp.add_argument("--jenis", default="cinematic",
-                    choices=["short", "cinematic", "amv", "podcast"],
+                    choices=["short", "cinematic", "podcast"],
                     help="Menentukan gaya prompt dan folder tujuannya di bahan/")
     pp.add_argument("--tema", default="", help="Tema videonya, supaya klipnya nyambung")
     pp.add_argument("--rasio", default="16:9",
@@ -406,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Jaga folder unduhan; klip baru otomatis masuk ke folder bahan",
     )
     pn.add_argument("--jenis", default="cinematic",
-                    choices=["short", "cinematic", "amv", "podcast"],
+                    choices=["short", "cinematic", "podcast"],
                     help="Folder bahan tujuannya")
     pn.add_argument("--dari", default="",
                     help="Folder yang dijaga (bawaan: folder Downloads-mu)")

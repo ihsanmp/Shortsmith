@@ -41,13 +41,6 @@ const JENIS = [
     isi: "Potongan dari rekaman obrolan: ritme lebih lambat, subtitle menempel karena yang dijual adalah apa yang diucapkan.",
     detail: ["Rasio bebas dipilih", "Subtitle otomatis", "Musik opsional"],
   },
-  {
-    id: "amv",
-    nama: "AMV anime",
-    ringkas: "Potongan cepat mengikuti lagu",
-    isi: "Rangkaian klip yang mengikuti lagu, bukan ucapan. Lagunya jadi jalur utama — bukan latar — jadi ia wajib diisi.",
-    detail: ["Rasio dari konsep", "Tanpa subtitle", "Lagu WAJIB, keras"],
-  },
 ] as const;
 
 export default function PilihJenis() {
@@ -82,13 +75,11 @@ export default function PilihJenis() {
           mengecewakan. Jenis mengubah bingkai dan panjang; ia tidak mengubah
           cara agent memutuskan potongan mana yang dipakai. */}
       <p className="jenis-catatan">
-        Keempatnya memakai mesin editing yang sama. Yang jenisnya tentukan cuma
-        dua: apakah subtitle dibakar, dan seberapa keras lagunya. Rasio kamu
-        pilih sendiri di langkah berikutnya, dan <strong>ritme potongannya datang
-        dari konsep</strong> yang diukur dari video contoh. Untuk AMV itu
-        berarti: buat konsep dari beberapa AMV yang kamu suka, dan panjang
-        shot-nya akan terukur dari sana — sekitar 0,33 detik pada contoh yang
-        sudah diukur, lawan 1,9&ndash;2,0 detik untuk cinematic dan podcast.
+        Ketiganya memakai mesin editing yang sama. Yang jenisnya tentukan cuma
+        satu hal: apakah subtitle dibakar. Rasio kamu pilih sendiri di langkah
+        berikutnya, dan <strong>ritme potongannya datang dari konsep</strong>
+        yang diukur dari video contoh — sekitar 1,9&ndash;2,0 detik per shot
+        pada contoh cinematic dan podcast yang sudah diukur.
       </p>
     </section>
   );

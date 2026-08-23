@@ -12,7 +12,7 @@ import { galatDari } from "@/lib/galat";
 
 type Concept = { id: string; nama: string; siap: boolean; isDefault: boolean };
 type Sumber = "pustaka" | "unggah";
-type JenisVideo = "short" | "cinematic" | "amv" | "podcast";
+type JenisVideo = "short" | "cinematic" | "podcast";
 
 /** Nama yang ditampilkan per jenis, plus apakah lagunya wajib. */
 /**
@@ -31,33 +31,31 @@ const RASIO_OUT = [
   { nilai: "1:1", judul: "1:1 persegi", ket: "feed persegi" },
 ];
 
+/**
+ * Sempat ada field `laguWajib` di sini, satu-satunya yang bernilai true adalah
+ * AMV -- lagunya memang jalur utama di sana, bukan latar. AMV dibuang dari
+ * program ini, dan tanpa AMV field itu bernilai false untuk semua jenis:
+ * sebuah cabang yang tidak pernah diambil, label "(wajib)" yang tidak pernah
+ * muncul, dan validasi yang tidak pernah menolak apa pun.
+ */
 const NAMA_JENIS: Record<
   JenisVideo,
-  { badge: string; judul: string; sub: string; laguWajib: boolean }
+  { badge: string; judul: string; sub: string }
 > = {
   short: {
     badge: "Short baru",
     judul: "Unggah rekaman",
     sub: "Tegak 9:16, subtitle menempel. Tentukan gayanya, sisanya otomatis.",
-    laguWajib: false,
   },
   cinematic: {
     badge: "Cinematic baru",
     judul: "Unggah rekaman",
     sub: "Lanskap 16:9 tanpa subtitle, potongan lebih bernapas.",
-    laguWajib: false,
-  },
-  amv: {
-    badge: "AMV baru",
-    judul: "Unggah klip",
-    sub: "Gambar mengikuti lagu. Lagunya jalur utama, jadi ia wajib diisi.",
-    laguWajib: true,
   },
   podcast: {
     badge: "Klip podcast baru",
     judul: "Unggah rekaman",
     sub: "Potongan obrolan dengan subtitle menempel, ritme lebih lambat.",
-    laguWajib: false,
   },
 };
 
@@ -136,7 +134,7 @@ export default function NewProjectPage() {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("jenis");
-    if (q === "short" || q === "cinematic" || q === "amv" || q === "podcast") setJenis(q);
+    if (q === "short" || q === "cinematic" || q === "podcast") setJenis(q);
   }, []);
 
   const [progress, setProgress] = useState(0);
@@ -262,9 +260,10 @@ export default function NewProjectPage() {
       ? Boolean(conceptId)
       : contoh.length >= 1 && contoh.length <= MAKS_CONTOH && namaKonsep.trim().length > 0;
 
-  // AMV tanpa lagu tidak masuk akal — lagunya yang jadi jalur utama. Dijaga di
-  // sini DAN di server: form bisa dilewati, rutenya tidak.
-  const laguValid = !NAMA_JENIS[jenis].laguWajib || Boolean(lagu || laguUnggah);
+  // Lagu selalu opsional sekarang. Dibiarkan sebagai konstanta bernama, bukan
+  // dihapus dari kondisi tombol, supaya tempat yang harus diubah tetap satu
+  // kalau nanti ada jenis yang memang mensyaratkannya.
+  const laguValid = true;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -652,7 +651,7 @@ export default function NewProjectPage() {
         {/* ---------- Lagu ---------- */}
         <div>
           <label>
-            Lagu {NAMA_JENIS[jenis].laguWajib ? "(wajib)" : "(opsional)"}
+            Lagu (opsional)
           </label>
 
           {asal === "lokal" && kelompok.length > 0 ? (
@@ -692,9 +691,7 @@ export default function NewProjectPage() {
           )}
 
           <p className="hint" style={{ marginTop: 6 }}>
-            {NAMA_JENIS[jenis].laguWajib
-              ? "AMV disusun mengikuti lagunya, jadi tanpa lagu tidak ada yang bisa diikuti."
-              : "Dipasang sebagai latar di bawah suara aslinya, pelan, dan meredup di akhir."}
+            Dipasang sebagai latar di bawah suara aslinya, pelan, dan meredup di akhir.
           </p>
         </div>
 

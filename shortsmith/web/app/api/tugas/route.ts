@@ -27,7 +27,7 @@ const BATAS_PROMPT = 5;
 const Buat = z.discriminatedUnion("tipe", [
   z.object({
     tipe: z.literal("prompt"),
-    jenis: z.enum(["short", "cinematic", "amv", "podcast"]),
+    jenis: z.enum(["short", "cinematic", "podcast"]),
     tema: z.string().max(500).default(""),
     /**
      * Berapa prompt yang diminta. Dibatasi lima karena itulah jumlah kartu di
@@ -41,7 +41,7 @@ const Buat = z.discriminatedUnion("tipe", [
   }),
   z.object({
     tipe: z.literal("review"),
-    jenis: z.enum(["short", "cinematic", "amv", "podcast"]),
+    jenis: z.enum(["short", "cinematic", "podcast"]),
     /** Klip hasil generate yang sudah diunggah, beserta prompt asalnya. */
     klip: z
       .array(
@@ -66,7 +66,7 @@ const Buat = z.discriminatedUnion("tipe", [
           nama: z.string().max(255),
           /**
            * Subfolder di dalam `bahan/` untuk berkas mode lokal. Bahan sekarang
-           * tersimpan per jenis (Short, Cinematic, AMV, Podcast, B-roll), jadi
+           * tersimpan per jenis (Short, Cinematic, Podcast, B-roll), jadi
            * nama saja tidak cukup untuk menemukannya.
            */
           folder: z.string().max(120).default(""),

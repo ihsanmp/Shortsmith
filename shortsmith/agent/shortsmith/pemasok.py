@@ -26,7 +26,7 @@ Bahkan kalau nanti dipanggil otomatis, batas itu tetap berlaku.
 ## Kenapa penambal, bukan pengganti
 
 Untuk short dan podcast, yang dijual adalah orang yang bicara — dan itu tidak
-bisa dihasilkan model. Untuk AMV dan cinematic, bahan asli tetap lebih murah dan
+bisa dihasilkan model. Untuk cinematic, bahan asli tetap lebih murah dan
 sudah ada di disk. Yang ditambal adalah kekurangan yang bisa dihitung: `penata`
 tidak boleh memakai satu klip dua kali, jadi pustaka yang lebih kecil dari
 jumlah slot adalah kekurangan yang nyata, bukan perasaan.
@@ -57,14 +57,12 @@ BATAS_SEKALI = 12
 FOLDER = {
     "short": "Short",
     "cinematic": "Cinematic",
-    "amv": "AMV",
     "podcast": "Podcast",
 }
 
 # Arahan gaya per jenis, diturunkan dari contoh yang benar-benar diukur — bukan
 # dari bayangan tentang apa arti kata "cinematic".
 #
-#     AMV  kuroshin031    shot 0,32s   2,10 potongan/detik   tanpa subtitle
 #     CINE rpm.cinema     shot 1,90s   0,35 potongan/detik   67% piksel gelap
 #     CINE sdmedia.hk     shot 2,07s   0,50 potongan/detik   82% piksel gelap
 #     POD  thecliper554   shot 2,00s   0,26 potongan/detik   subtitle terbakar
@@ -73,10 +71,6 @@ GAYA = {
     "cinematic": (
         "eksposur gelap dan berkontras tinggi, gerak kamera lambat dan mantap, "
         "shot panjang yang bernapas"
-    ),
-    "amv": (
-        "energi tinggi, gerak cepat, warna pekat, komposisi yang tetap terbaca "
-        "walau hanya tampil sepertiga detik"
     ),
     "podcast": "ruangan dengan cahaya hangat, gerak kamera minim, tenang",
 }

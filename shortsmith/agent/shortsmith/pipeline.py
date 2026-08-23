@@ -108,12 +108,12 @@ def build_edl(
     #
     # Sebelumnya jalur ini SELALU dilewati — keputusan lama ketika lagu memang
     # ditambahkan sendiri oleh pengguna setelah render. Sekarang lagu bisa
-    # dipilih di form, dan untuk AMV ia bahkan jalur utamanya, jadi melewatinya
-    # berarti mengabaikan berkas yang sengaja dikirim.
+    # dipilih di form, jadi melewatinya berarti mengabaikan berkas yang sengaja
+    # dikirim.
     #
-    # Kekerasannya datang dari jenis video, bukan angka tetap: latar yang pelan
-    # (-20 dB) tidak boleh menutupi ucapan, sedangkan AMV tidak punya ucapan
-    # yang perlu dilindungi.
+    # Kekerasannya tetap datang dari jenis video lewat parameter, bukan angka
+    # tetap di sini — walau ketiga jenis yang tersisa sama-sama memakai -20 dB,
+    # yaitu latar yang terdengar tanpa menutupi ucapan.
     music_obj = None
     sumber_musik = music or profile.music_path
     if sumber_musik:

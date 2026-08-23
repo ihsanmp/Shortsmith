@@ -2,49 +2,51 @@
 
 ## Yang ditimpa
 
-Tiga hal, dan ketiganya sudah bisa dikendalikan pipeline sejak sebelum modul ini
+Dua hal, dan keduanya sudah bisa dikendalikan pipeline sejak sebelum modul ini
 ada — jadi tidak ada yang perlu ditebak:
 
-  - **Rasio keluaran.** 9:16 untuk short, 16:9 untuk cinematic dan AMV.
-  - **Subtitle.** Dibakar untuk short; dimatikan untuk dua lainnya, karena teks
-    di dalam bingkai lanskap yang ditujukan untuk ditonton besar terbaca sebagai
-    tempelan, bukan bagian dari gambarnya.
-  - **Kekerasan lagu.** Latar yang pelan untuk short dan cinematic; jalur utama
-    yang keras untuk AMV.
+  - **Rasio keluaran.** 9:16 untuk short; cinematic dan podcast mengikuti
+    konsepnya.
+  - **Subtitle.** Dibakar untuk short dan podcast, karena keduanya menjual apa
+    yang diucapkan. Dimatikan untuk cinematic: teks di dalam bingkai yang
+    ditujukan untuk ditonton besar terbaca sebagai tempelan, bukan bagian dari
+    gambarnya.
 
 ## Yang TIDAK ditimpa, dan kenapa
 
 Gaya potongannya sendiri — panjang tiap shot, ritme, cara membuka. Itu diukur
-dari video contoh saat konsep dibuat, dan itulah satu-satunya sumber yang pernah
-mengukur sesuatu. Menetapkannya dari sebuah label jenis berarti mengarang angka
-yang tidak berasal dari bahan mana pun, lalu menyajikannya seolah hasil analisis.
+dari video contoh saat konsep dibuat, dan itulah satu-satunya sumber yang
+pernah mengukur sesuatu. Menetapkannya dari sebuah label jenis berarti mengarang
+angka yang tidak berasal dari bahan mana pun, lalu menyajikannya seolah hasil
+analisis.
 
-Konsekuensinya jujur: memilih "AMV" tidak membuat potongannya mengikuti ketukan
-lagu. Untuk itu dibutuhkan deteksi ketukan dan penjadwalan potongan terhadapnya —
-pekerjaan tersendiri yang belum ada di pipeline ini.
+## Kenapa rasio tidak dipaksa untuk cinematic dan podcast
 
-## Apa yang diukur dari contoh yang dikirim pengguna
+Karena terukur bahwa rasio bukan penanda jenis. Contoh yang pernah dikirim
+pengguna, semuanya berbeda meski kategorinya sama::
 
-    AMV  kuroshin031      1024x576 16:9        shot 0,32s  2,10/dtk  tanpa subtitle
-    AMV  hatsune_arima0    576x746  3:4 potret  shot 0,33s  2,02/dtk  tanpa subtitle
-    CINE rpm.cinema        576x1024 9:16 potret shot 1,90s  0,35/dtk  tanpa subtitle
-    CINE bubbawubba7      1280x720  16:9        shot 1,03s  0,68/dtk  tanpa subtitle
-    POD  thecliper554     1024x576  16:9        shot 2,00s  0,26/dtk  SUBTITLE terbakar
+    CINE rpm.cinema        576x1024 9:16 potret  shot 1,90s  tanpa subtitle
+    CINE bubbawubba7      1280x720  16:9         shot 1,03s  tanpa subtitle
+    CINE sdmedia.hk        576x1024 9:16 potret  shot 2,07s  82% gelap
+    POD  thecliper554     1024x576  16:9         shot 2,00s  SUBTITLE terbakar
 
-Rasio berbeda-beda di semua kategori, jadi ia bukan penanda apa pun. Yang
-memisahkan dengan bersih cuma dua hal:
+Rasio mengikuti ke mana videonya diunggah, dan itu sudah diukur konsep dari
+video contohnya sendiri.
 
-  - **Ritme.** AMV 0,32-0,33 detik per shot; sisanya 1,0-2,0 detik. Beda hampir
-    enam kali lipat, dan tidak ada yang berada di antaranya.
-  - **Subtitle.** Ada pada podcast (dan short); tidak ada pada cinematic dan AMV.
+Short tetap dipaksa 9:16, dan itu bukan pengecualian sembarangan: TikTok,
+Reels, dan Shorts memang mensyaratkannya. Itu tuntutan platform, bukan selera
+gaya yang bisa diukur dari bahan.
 
-Cinematic dan podcast TIDAK terpisah oleh ritme — 1,90 lawan 2,00 detik praktis
-sama. Yang membedakan keduanya adalah ada tidaknya ucapan yang perlu dibaca.
+Cinematic dan podcast juga TIDAK terpisah oleh ritme — 1,90 lawan 2,00 detik
+praktis sama. Yang membedakan keduanya adalah ada tidaknya ucapan yang perlu
+dibaca, dan itulah satu-satunya hal yang ditimpa di sini.
 
-Ritme itu sengaja TIDAK diatur di file ini. Ia justru hal yang paling tepat
-diukur lewat konsep: buat konsep dari beberapa video contoh, dan
-`avg_shot_length` terisi dari bahan yang sebenarnya — bukan dari angka yang
-diketik seseorang di sini.
+## AMV pernah ada di sini
+
+Ia dibuang: program ini tidak lagi mengedit AMV. Bersamanya hilang satu-satunya
+jenis yang digerakkan lagu dan bukan ucapan — jadi tidak ada lagi kasus di mana
+lagu perlu naik jadi jalur utama, dan tidak ada lagi jenis tanpa ucapan yang
+ritmenya jauh berbeda dari sisanya.
 """
 
 from __future__ import annotations
@@ -58,30 +60,16 @@ log = logging.getLogger(__name__)
 
 # Kekerasan lagu relatif terhadap suara utama, dalam dB.
 #
-# -20 dB adalah latar yang jelas terdengar tanpa menutupi ucapan. Untuk AMV
-# tidak ada ucapan yang perlu dilindungi, jadi lagunya naik menjadi jalur utama.
+# Satu nilai saja sekarang: -20 dB adalah latar yang jelas terdengar tanpa
+# menutupi ucapan. Ketiga jenis yang tersisa punya ucapan yang perlu dilindungi,
+# jadi tidak ada yang membutuhkan angka kedua.
 GAIN_LATAR = -20.0
-GAIN_UTAMA = -3.0
 
 # `rasio: None` berarti JANGAN ditimpa — pakai apa pun yang ditetapkan konsep.
-#
-# AMV dan cinematic sempat dipaksa 16:9 di sini. Keduanya terbantah oleh contoh
-# yang dikirim pengguna, yang rasionya justru berbeda-beda semua:
-#
-#     AMV kuroshin031      1024x576  16:9
-#     AMV hatsune_arima0    576x746  3:4 potret
-#     cinematic rpm.cinema  576x1024 9:16 potret
-#
-# Rasio bukan penanda jenis — ia mengikuti ke mana videonya diunggah, dan itu
-# sudah diukur konsep dari video contohnya sendiri.
-#
-# Short tetap dipaksa 9:16, dan itu bukan pengecualian yang sembarangan: TikTok,
-# Reels, dan Shorts memang mensyaratkannya. Itu tuntutan platform, bukan selera
-# gaya yang bisa diukur dari bahan.
+# Alasannya, beserta ukurannya, ada di docstring modul.
 ATURAN: dict[str, dict] = {
     "short": {"rasio": "9:16", "subtitle": True, "gain_db": GAIN_LATAR},
     "cinematic": {"rasio": None, "subtitle": False, "gain_db": GAIN_LATAR},
-    "amv": {"rasio": None, "subtitle": False, "gain_db": GAIN_UTAMA},
     # Podcast: ada ucapan, jadi subtitle menyala seperti short — tapi rasionya
     # TIDAK dipaksa. Contoh yang diukur 16:9 lanskap, dan klip podcast memang
     # beredar di lanskap maupun potret tergantung tujuan unggahnya.

@@ -13,10 +13,9 @@ masing dari bagian yang berbeda.
 ## Kenapa hanya untuk short dan podcast
 
 Keduanya digerakkan oleh apa yang DIKATAKAN, jadi "topik" memang satuan yang
-ada di dalamnya dan bisa dipisah. Cinematic dan AMV digerakkan oleh gaya
-gambar dan musik; keduanya tidak punya topik untuk dipisah, dan memaksanya
-akan memotong satu rangkaian visual jadi beberapa potongan yang lebih lemah
-daripada aslinya.
+ada di dalamnya dan bisa dipisah. Cinematic digerakkan oleh gaya gambar; ia
+tidak punya topik untuk dipisah, dan memaksanya akan memotong satu rangkaian
+visual jadi beberapa potongan yang lebih lemah daripada aslinya.
 
 ## Kenapa penemuan topik terpisah dari pemilihan potongan
 
@@ -61,8 +60,8 @@ MIN_KLIP = 2
 # 2.
 MENIT_PER_KLIP = 10.0
 
-# Jenis yang boleh dipecah. Lihat docstring modul untuk alasan cinematic dan
-# AMV tidak termasuk.
+# Jenis yang boleh dipecah. Lihat docstring modul untuk alasan cinematic tidak
+# termasuk.
 JENIS_BOLEH = {"short", "podcast"}
 
 

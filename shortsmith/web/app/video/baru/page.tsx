@@ -1,6 +1,9 @@
 import { TombolKembali } from "@/components/ui/tombol-kembali";
 
-export const dynamic = "force-dynamic";
+// TIDAK force-dynamic. Halaman ini murni teks yang sama untuk semua orang --
+// tidak ada query, tidak ada cookie, tidak ada header. Memaksanya dinamis
+// berarti membayar render server (terukur ~290 ms) untuk sesuatu yang bisa
+// diambil CDN dalam ~38 ms.
 
 /**
  * Pemilih jenis video, sebelum formnya.

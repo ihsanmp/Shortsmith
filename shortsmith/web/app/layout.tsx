@@ -1,39 +1,34 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { cookies } from "next/headers";
-
-import { COOKIE_NAME, bacaIsiSesi } from "@/lib/session";
-import { akunSekarang } from "@/lib/akun";
 
 import "./globals.css";
-import { NavUtama } from "./nav-utama";
-import { MenuProfil } from "@/components/ui/menu-profil";
+import { NavBar } from "./nav-bar";
 
 export const metadata: Metadata = {
   title: "Shortsmith",
   description: "Dari rekaman panjang ke short video, otomatis.",
 };
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const sesi = bacaIsiSesi((await cookies()).get(COOKIE_NAME)?.value);
-  // Satu fakta, dua akibat di navbar: tamu tidak melihat "Buat Short", dan
-  // hanya tamu yang melihat "Get Started". Diturunkan sebagai satu prop supaya
-  // keduanya tidak bisa berbeda pendapat.
-  const tamu = !sesi || sesi.peran === "tamu";
-
-  // Nama dan foto disiapkan DI SERVER, bukan diambil menu profil belakangan.
-  //
-  // Avatar kecil di navbar terlihat sejak halaman muncul, sementara isi menunya
-  // baru diambil saat dibuka. Kalau keduanya mengandalkan pengambilan yang
-  // sama, avatarnya menampilkan gambar bawaan sampai seseorang membuka menu —
-  // dan bagi yang baru saja mengunggah foto, itu terbaca seperti unggahannya
-  // gagal.
-  //
-  // Ongkosnya satu pembacaan berindeks per render halaman. Itu jauh lebih murah
-  // daripada tulisan yang dulu ada di sini, dan ia hanya berjalan untuk sesi
-  // yang memang punya akun.
-  const akun = tamu ? null : await akunSekarang(sesi);
-
+/**
+ * Layout ini SENGAJA tidak membaca cookie.
+ *
+ * Dulu ia membacanya untuk tahu pengguna tamu atau bukan, lalu meneruskannya ke
+ * navbar. Satu baris, tapi akibatnya menyeluruh: `cookies()` di layout membuat
+ * Next.js tidak bisa menyiapkan halaman apa pun di muka -- setiap halaman harus
+ * dirender per permintaan, termasuk /about dan /video/baru yang isinya sama
+ * untuk semua orang.
+ *
+ * Terukur dari Jakarta pada koneksi yang dipakai ulang: aset statis dari CDN 38
+ * ms, halaman dinamis 329 ms. Selisihnya dibayar di setiap perpindahan halaman.
+ *
+ * Sesi sekarang ditanyakan navbar sendiri dari peramban -- lihat nav-bar.tsx
+ * untuk cara keadaan "belum tahu" digambar tanpa membuat navbar terlihat
+ * berubah pikiran.
+ *
+ * Halaman yang isinya MEMANG bergantung pada database (/projects, /project/[id],
+ * /concepts) tetap dinamis, dan itu benar: isinya berbeda tiap orang.
+ */
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="id">
       <body>
@@ -46,15 +41,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 HALAMAN, bukan di tengah ruang sisa antara logo dan menu profil —
                 keduanya beda lebar, jadi menaruhnya di satu kelompok kanan akan
                 membuatnya meleset dari poros. */}
-            <div className="nav-tengah">
-              <NavUtama tamu={tamu} />
-            </div>
-            <div className="nav-kanan">
-              <MenuProfil
-                awalUsername={akun?.username ?? null}
-                awalAvatarUrl={akun?.avatarUrl ?? null}
-              />
-            </div>
+            <NavBar />
           </nav>
           {children}
         </div>

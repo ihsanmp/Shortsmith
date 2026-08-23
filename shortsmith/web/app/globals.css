@@ -4608,3 +4608,13 @@ body:has(.hero) {
   font-size: 0.82rem;
   color: var(--ink-3);
 }
+
+/* Tempat navbar sebelum jawaban sesi datang.
+   
+   Tingginya dipertahankan supaya isi halaman di bawahnya tidak melompat saat
+   navbar terisi — pergeseran tata letak justru lebih terlihat daripada navbar
+   yang muncul sepersekian detik belakangan. Lebarnya nol karena kedua sel
+   memang melebar sendiri mengikuti isinya. */
+.nav-kosong {
+  min-height: 44px;
+}

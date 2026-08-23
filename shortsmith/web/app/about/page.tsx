@@ -4,6 +4,15 @@ import { db } from "@/db";
 import { conceptProfiles, projects } from "@/db/schema";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
 
+// Tetap dinamis, dan itu keputusan setelah mencoba sebaliknya.
+//
+// `revalidate` sempat dipasang di sini supaya halamannya disajikan CDN. Ia
+// membuat Next menyiapkan halaman ini SAAT BUILD -- dan build lalu gagal total
+// dengan ECONNREFUSED ketika databasenya tidak bisa dihubungi.
+//
+// Artinya deploy jadi bergantung pada database sedang hidup, demi dua angka
+// hitungan yang cuma dipajang. Itu menukar ketahanan deploy dengan 250 ms di
+// satu halaman yang jarang dibuka; tidak sepadan.
 export const dynamic = "force-dynamic";
 
 /**

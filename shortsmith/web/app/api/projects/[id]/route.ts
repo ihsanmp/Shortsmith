@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { assets, conceptProfiles, jobs, projects } from "@/db/schema";
-import { queuePosition, reapStaleJobs } from "@/lib/jobs";
+import { queuePosition } from "@/lib/jobs";
 import { hapusObjek, presignDownload } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -14,34 +14,50 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Params) {
   const { id } = await params;
 
-  // Pungut job terlantar setiap kali antrean disentuh — tidak perlu cron terpisah.
-  await reapStaleJobs();
-
-  const [project] = await db
-    .select({
-      id: projects.id,
-      judul: projects.judul,
-      brief: projects.brief,
-      status: projects.status,
-      createdAt: projects.createdAt,
-      conceptId: projects.conceptId,
-      conceptNama: conceptProfiles.nama,
-    })
-    .from(projects)
-    .leftJoin(conceptProfiles, eq(projects.conceptId, conceptProfiles.id))
-    .where(eq(projects.id, id))
-    .limit(1);
+  // Tiga pembacaan yang saling BEBAS, dijalankan bersamaan.
+  //
+  // Sebelumnya berurutan, dan halaman project mem-poll route ini tiap empat
+  // detik selama render berjalan — yang bisa berlangsung dua puluh lima menit.
+  // Tiap round-trip ke Postgres dari Vercel berbiaya puluhan milidetik, jadi
+  // menunggu satu selesai sebelum memulai berikutnya membayar ongkos itu tiga
+  // kali untuk pertanyaan yang tidak saling bergantung.
+  //
+  // `reapStaleJobs()` DIBUANG dari sini, bukan sekadar dipindah. Ia query
+  // UPDATE, dan ini jalur BACA: tiap halaman project yang terbuka menulis ke
+  // database tiap empat detik tanpa ada yang memintanya. Pemungutannya sudah
+  // dilakukan /api/jobs/next, yang memang disentuh daemon tiap sepuluh detik --
+  // jadi tidak ada yang hilang, yang hilang cuma tulisannya.
+  const [[project], [job], keluaranMentah] = await Promise.all([
+    db
+      .select({
+        id: projects.id,
+        judul: projects.judul,
+        brief: projects.brief,
+        status: projects.status,
+        createdAt: projects.createdAt,
+        conceptId: projects.conceptId,
+        conceptNama: conceptProfiles.nama,
+      })
+      .from(projects)
+      .leftJoin(conceptProfiles, eq(projects.conceptId, conceptProfiles.id))
+      .where(eq(projects.id, id))
+      .limit(1),
+    db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.projectId, id))
+      .orderBy(desc(jobs.createdAt))
+      .limit(1),
+    db
+      .select()
+      .from(assets)
+      .where(and(eq(assets.projectId, id), eq(assets.jenis, "output")))
+      .orderBy(assets.urutan, desc(assets.createdAt)),
+  ]);
 
   if (!project) {
     return Response.json({ error: "Project tidak ditemukan" }, { status: 404 });
   }
-
-  const [job] = await db
-    .select()
-    .from(jobs)
-    .where(eq(jobs.projectId, id))
-    .orderBy(desc(jobs.createdAt))
-    .limit(1);
 
   // Satu project bisa punya beberapa hasil.
   //
@@ -50,11 +66,7 @@ export async function GET(_request: Request, { params }: Params) {
   // semuanya disisipkan dalam satu batch sehingga waktunya identik, dan
   // penentu akhirnya jatuh ke UUID acak -- nomor klip akan berubah tiap kali
   // halaman dimuat.
-  const keluaran = await db
-    .select()
-    .from(assets)
-    .where(and(eq(assets.projectId, id), eq(assets.jenis, "output")))
-    .orderBy(assets.urutan, desc(assets.createdAt));
+  const keluaran = keluaranMentah;
 
   const semuaOutput = await Promise.all(
     keluaran.map(async (o) => ({

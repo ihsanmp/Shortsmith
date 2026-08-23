@@ -152,7 +152,14 @@ class FfmpegRenderer(Renderer):
 
         pakai_musik = edl.music is not None
         if pakai_musik:
-            cmd += ["-stream_loop", "-1", "-i", edl.music.src]
+            # -ss SEBELUM -i: mencari di dalam berkas masukan, bukan memotong
+            # keluaran. Ditaruh setelah -stream_loop supaya tiap pengulangan
+            # kembali ke titik yang sama, bukan ke detik nol — kalau tidak,
+            # pengulangan kedua membawa kembali intro yang sengaja dihindari.
+            cmd += ["-stream_loop", "-1"]
+            if edl.music.mulai > 0:
+                cmd += ["-ss", f"{edl.music.mulai:.3f}"]
+            cmd += ["-i", edl.music.src]
 
         # --- filter graph ---
         graph: list[str] = []

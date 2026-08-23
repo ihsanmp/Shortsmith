@@ -121,8 +121,15 @@ def build_edl(
         # work dir, jadi path relatif -- yang mungkin datang dari
         # `profile.music_path` -- akan gagal dibuka di sana dengan pesan "No
         # such file or directory" yang menunjuk berkas yang jelas-jelas ada.
+        from .suara import pilih_bagian
+
+        jalur_musik = str(Path(sumber_musik).resolve())
+        # Bagian lagunya dipilih dari panjang video, bukan selalu dari detik
+        # nol. Alasan dan ukurannya ada di pilih_bagian.
         music_obj = Music(
-            src=str(Path(sumber_musik).resolve()), gain_db=music_gain_db
+            src=jalur_musik,
+            gain_db=music_gain_db,
+            mulai=pilih_bagian(jalur_musik, profile.target_duration()),
         )
         log.info("musik: %s @ %.0f dB", Path(sumber_musik).name, music_gain_db)
 

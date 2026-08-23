@@ -237,7 +237,14 @@ class OverlayRenderer(Renderer):
         if pakai_musik:
             # -stream_loop -1: lagu yang lebih pendek dari videonya diulang,
             # bukan berhenti di tengah dan meninggalkan sisanya sunyi.
-            cmd += ["-stream_loop", "-1", "-i", edl.music.src]
+            # -ss SEBELUM -i: mencari di dalam berkas masukan, bukan memotong
+            # keluaran. Ditaruh setelah -stream_loop supaya tiap pengulangan
+            # kembali ke titik yang sama, bukan ke detik nol — kalau tidak,
+            # pengulangan kedua membawa kembali intro yang sengaja dihindari.
+            cmd += ["-stream_loop", "-1"]
+            if edl.music.mulai > 0:
+                cmd += ["-ss", f"{edl.music.mulai:.3f}"]
+            cmd += ["-i", edl.music.src]
             total = edl.total_duration
             mulai_fade = max(0.0, total - edl.music.fade_out)
             graph.append(

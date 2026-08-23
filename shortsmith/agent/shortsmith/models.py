@@ -299,6 +299,11 @@ class Music(BaseModel):
     src: str
     gain_db: float = -20.0
     fade_out: float = 1.5
+    # Detik mulai di dalam lagunya, dipilih shortsmith.suara.pilih_bagian.
+    #
+    # 0 berarti dari awal — dan awal lagu hampir selalu intro, bagian yang
+    # paling pelan dan paling tidak dikenali. Lihat pilih_bagian untuk ukurannya.
+    mulai: float = 0.0
 
 
 class Resolution(BaseModel):

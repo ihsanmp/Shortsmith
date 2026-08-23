@@ -156,3 +156,96 @@ def ratakan_edl(edl) -> int:
     except Exception:  # noqa: BLE001
         log.warning("perataan suara dilewati", exc_info=True)
         return 0
+
+
+# --------------------------------------------------------------------------
+# Memilih bagian lagu yang dipakai
+# --------------------------------------------------------------------------
+
+# Seberapa berat keragaman dihukum saat memilih bagian lagu.
+#
+# Bukan sekadar "pilih yang paling keras". Lagu ini dipasang DI BAWAH ucapan,
+# dan bagian yang naik-turun tajam menarik perhatian menjauh dari yang bicara --
+# persis kebalikan dari gunanya musik latar. Setengah berarti satu satuan
+# simpangan baku menghapus setengah satuan kenyaringan.
+BOBOT_RAGAM = 0.5
+
+# Jarak antar titik awal yang dicoba, dalam detik. Lebih rapat tidak mengubah
+# pilihan secara berarti karena kenyaringan lagu bergerak lambat.
+LANGKAH_CARI = 5.0
+
+
+def profil_lagu(src: str) -> tuple[list[float], list[float]]:
+    """(detik, LUFS sesaat) sepanjang lagu. Kosong kalau gagal dibaca."""
+    hasil = subprocess.run(
+        [SETTINGS.ffmpeg, "-hide_banner", "-i", src, "-af", "ebur128", "-f", "null", "-"],
+        capture_output=True,
+        text=True,
+        errors="replace",
+    )
+    t: list[float] = []
+    v: list[float] = []
+    for baris in hasil.stderr.split("\n"):
+        m = _POLA.search(baris)
+        if m:
+            nilai = float(m.group(2))
+            if nilai > HENING_LUFS:
+                t.append(float(m.group(1)))
+                v.append(nilai)
+    return t, v
+
+
+def pilih_bagian(src: str, durasi: float) -> float:
+    """Detik mulai bagian lagu yang paling pantas untuk video sepanjang ini.
+
+    ## Kenapa tidak dari detik nol
+
+    Lagu punya intro. Terukur pada satu lagu nyata sepanjang 218 detik::
+
+        0-20 detik      sekitar -13,5 LUFS   <- intro
+        20-200 detik    sekitar  -6,5 LUFS   <- badan lagu
+        210 detik ke atas       -15,9 LUFS   <- memudar
+
+    Untuk klip 77 detik, memulai dari nol cuma merugi 1,3 LU karena intronya
+    terencerkan oleh sisanya. Untuk klip 20-30 detik, hampir SELURUH klip berisi
+    intro -- bagian lagu yang paling tidak dikenali orang.
+
+    ## Kenapa bukan sekadar bagian paling keras
+
+    Musik ini dipasang di bawah ucapan. Bagian yang naik-turun tajam menarik
+    perhatian menjauh dari yang bicara, jadi keragamannya ikut dihukum lewat
+    BOBOT_RAGAM. Yang dicari bagian yang mantap, bukan yang paling dramatis.
+
+    Kembalikan 0.0 kalau lagunya tidak bisa dibaca atau terlalu pendek untuk
+    dipilih-pilih -- perilaku lama, dan tidak pernah lebih buruk dari itu.
+    """
+    if durasi <= 0:
+        return 0.0
+    try:
+        t, v = profil_lagu(src)
+    except Exception:  # noqa: BLE001
+        return 0.0
+    if len(t) < 10 or t[-1] <= durasi:
+        return 0.0
+
+    tt = np.array(t)
+    vv = np.array(v)
+    terbaik, skor_terbaik = 0.0, -1e9
+    mulai = 0.0
+    while mulai + durasi <= tt[-1]:
+        sel = vv[(tt >= mulai) & (tt < mulai + durasi)]
+        if sel.size >= 5:
+            skor = float(np.median(sel)) - BOBOT_RAGAM * float(np.std(sel))
+            if skor > skor_terbaik:
+                skor_terbaik, terbaik = skor, mulai
+        mulai += LANGKAH_CARI
+
+    if terbaik > 0:
+        log.info(
+            "bagian lagu dipilih: mulai %.0f detik (skor %.1f, lawan %.1f dari awal)",
+            terbaik,
+            skor_terbaik,
+            float(np.median(vv[tt < durasi]))
+            - BOBOT_RAGAM * float(np.std(vv[tt < durasi])),
+        )
+    return terbaik

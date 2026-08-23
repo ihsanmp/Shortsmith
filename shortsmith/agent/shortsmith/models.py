@@ -243,6 +243,12 @@ class PlannedCut(BaseModel):
     role: Role
     alasan: str = Field(description="Kenapa potongan ini dipilih")
     zoom: float = Field(default=1.0, ge=1.0, le=1.6, description="Punch-in; 1.0 = tanpa zoom")
+    # Penguatan suara potongan ini, dalam dB. Diisi shortsmith.suara setelah EDL
+    # jadi; 0 berarti tidak perlu dikoreksi.
+    #
+    # Disimpan DI DALAM EDL, bukan dihitung ulang saat render, supaya keputusan
+    # kenyaringan bisa dibaca dari edl.json seperti keputusan lainnya.
+    gain_db: float = 0.0
 
     @model_validator(mode="after")
     def _cek_urutan(self) -> PlannedCut:

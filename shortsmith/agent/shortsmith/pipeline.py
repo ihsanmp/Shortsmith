@@ -430,6 +430,15 @@ def run(
     if n_warna:
         log.info("[4/5] warna: %d potongan diratakan eksposurnya", n_warna)
 
+    # Padanan yang sama untuk suara: potongan dari menit yang berjauhan
+    # disambung, dan kenyaringannya melonjak di sambungan. Terukur 4 dari 8
+    # sambungan di atas 3 LU pada satu hasil nyata, dengan puncak 9,6 LU.
+    from .suara import ratakan_edl as ratakan_suara
+
+    n_suara = ratakan_suara(edl)
+    if n_suara:
+        log.info("[4/5] suara: %d potongan diratakan kenyaringannya", n_suara)
+
     _write_json(edl_file, edl)
     log.info(
         "      format %s, %.1fs, %d caption",

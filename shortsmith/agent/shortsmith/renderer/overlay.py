@@ -157,7 +157,11 @@ class OverlayRenderer(Renderer):
             "-i", src,
             "-t", f"{cut.durasi:.3f}",
             "-vn",
-            "-af", _fade_audio(cut.durasi),
+            # Penguatan DULU, fade belakangan. Urutan sebaliknya akan
+            # mengeraskan kembali bagian yang baru saja diredupkan, sehingga
+            # fade-nya tidak lagi mencapai nol di ujung potongan.
+            "-af", (f"volume={cut.gain_db:+.2f}dB," if cut.gain_db else "")
+                   + _fade_audio(cut.durasi),
             "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2",
             nama,
         ]

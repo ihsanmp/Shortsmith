@@ -232,7 +232,33 @@ def _titik_tersunyi(x: "np.ndarray") -> tuple[int, float, float]:
 
 # Lebar pencarian dua arah. Lebih lebar dari JENDELA_ENERGI karena celah antar
 # kata yang benar bisa jauh dari angka Whisper — terukur 220 ms pada satu kasus.
-JENDELA_CARI = 0.30
+# Seberapa jauh hening dicari dari batas yang dipilih model, ke dua arah.
+#
+# Sempat 0,30 detik, dan itu terlalu sempit -- terukur pada satu hasil nyata,
+# lebih dari separuh sambungan jatuh di tengah ucapan::
+#
+#     18 batas diperiksa
+#      2 punya hening di dalam jendela 0,30 detik
+#      5 punya hening, tapi 0,52-0,85 detik jauhnya
+#     11 tidak punya hening yang memenuhi syarat sama sekali
+#
+# Aritmetikanya menjelaskan sendiri: rekaman itu punya sekitar 12 pita hening
+# per 60 detik, satu tiap lima detik. Jendela 0,6 detik total pada jeda yang
+# muncul tiap lima detik memberi peluang sekitar 12% -- dan yang terukur 2 dari
+# 7, persis di situ.
+#
+# 0,90 menampung jarak terjauh yang terukur (0,85 detik). Lebih lebar lagi mulai
+# memindahkan batas sejauh satu frasa penuh, dan yang didapat bukan potongan
+# yang lebih bersih melainkan potongan yang isinya berbeda dari yang direncanakan.
+JENDELA_CARI = 0.90
+
+# Batas tidak boleh bergeser lebih dari sekian bagian panjang potongannya.
+#
+# Jendela yang lebar aman untuk potongan empat detik, tapi tidak untuk potongan
+# satu detik: memindahkan batasnya 0,9 detik mengubah hampir seluruh isinya.
+# Seperempat berarti potongan 4 detik boleh bergeser 1 detik, dan potongan 1
+# detik hanya 0,25 detik.
+MAKS_GESER_BAGIAN = 0.25
 
 # Titik yang dipilih harus sunyi SUNGGUHAN, bukan sekadar paling sunyi di
 # antara yang ada. Tanpa syarat absolut ini, pencarian di tengah kalimat akan
@@ -434,9 +460,16 @@ def rapikan_energi(
         # sudah terlanjur berada di dalam suara. Kalau ia menemukan hening yang
         # jelas, itulah letak batas yang benar dan sisanya tidak perlu.
         sudah: set[str] = set()
+        batas_geser = max(0.05, cut.durasi * MAKS_GESER_BAGIAN)
         for sisi in ("out", "in_"):
-            baru = _geser_ke_hening(src, getattr(cut, sisi), JENDELA_CARI)
+            lama_t = getattr(cut, sisi)
+            baru = _geser_ke_hening(src, lama_t, JENDELA_CARI)
             if baru is None:
+                continue
+            # Jendela lebar tidak boleh berarti geseran sebesar apa pun. Lihat
+            # MAKS_GESER_BAGIAN: yang benar untuk potongan empat detik merusak
+            # potongan satu detik.
+            if abs(baru - lama_t) > batas_geser:
                 continue
             if sisi == "out" and cut.in_ < baru:
                 cut.out = round(baru, 3)
@@ -489,6 +522,25 @@ def rapikan_energi(
             )
             diubah += 1
 
+    # --- pagar terakhir: potongan tidak boleh saling melangkahi ---
+    #
+    # Jendela pencarian yang lebar membuat `out` sebuah potongan bisa maju
+    # melewati `in_` potongan berikutnya. Kalau keduanya memang bersambung di
+    # rekaman -- dan itu terjadi; terukur ada dua batas yang persis sama di satu
+    # EDL nyata -- hasilnya adalah audio yang sama terdengar DUA KALI di
+    # sambungan.
+    #
+    # Terukur pada uji pelebaran jendela: satu tumpang tindih tercipta dari 9
+    # potongan. Kecil, tapi yang terdengar adalah kata yang diulang, dan itu
+    # jauh lebih kentara daripada potongan yang sedikit terpenggal.
+    ditarik = 0
+    for a, b in zip(cuts, cuts[1:]):
+        if a.out > b.in_ and a.in_ < b.in_:
+            a.out = round(b.in_, 3)
+            ditarik += 1
+
     if diubah:
         log.info("batas dirapikan ke titik hening audio: %d dari %d", diubah, len(cuts) * 2)
+    if ditarik:
+        log.info("%d batas ditarik kembali agar potongan tidak tumpang tindih", ditarik)
     return diubah

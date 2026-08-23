@@ -119,7 +119,20 @@ export function queuePositionSql(jobId: string): SQL {
   return sql`
     SELECT COUNT(*)::int AS posisi
       FROM jobs
-     WHERE status = 'pending'
-       AND created_at < (SELECT created_at FROM jobs WHERE id = ${jobId})
+     WHERE
+       -- Job yang SEDANG dikerjakan ikut dihitung, dan ini yang sebelumnya
+       -- hilang. Agent mengerjakan satu job pada satu waktu, jadi job yang
+       -- sedang berjalan berada di depan antrean seperti halnya job pending
+       -- yang lebih tua.
+       --
+       -- Tanpa ini, job yang menunggu di belakang satu job berjalan terbaca
+       -- berposisi NOL, dan halaman project menyimpulkan tidak ada apa-apa di
+       -- depannya -- lalu menampilkan "Pastikan agent sedang berjalan di PC
+       -- lokal" untuk agent yang sebenarnya sibuk mengerjakan job sebelumnya.
+       status = 'processing'
+       OR (
+         status = 'pending'
+         AND created_at < (SELECT created_at FROM jobs WHERE id = ${jobId})
+       )
   `;
 }

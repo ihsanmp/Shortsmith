@@ -133,9 +133,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <>Menunggu agent mengambil job ini. Pastikan agent sedang berjalan di PC lokal.</>
           ) : (
             <>
-              Posisi antrean: <strong>{job.posisiAntrean + 1}</strong>. Perkiraan mulai
-              diproses sekitar <strong>{job.estimasiMenit} menit</strong> lagi — satu PC
-              hanya bisa memproses satu job pada satu waktu.
+              Ada <strong>{job.posisiAntrean}</strong> job di depan job ini — satu PC
+              hanya bisa memproses satu job pada satu waktu, jadi yang ini menunggu
+              giliran. <strong>Agent-nya tidak bermasalah.</strong>
+              {/* Rentang, bukan satu angka.
+                  
+                  Sebelumnya di sini tertulis perkiraan menit yang dihitung dari
+                  satu angka tetap per job. Sejak topik yang dikosongkan
+                  menghasilkan beberapa klip, lama satu job berkisar dari
+                  sepuluh menit sampai dua puluh lima — jadi angka tunggal
+                  berapa pun akan meleset untuk separuh kasusnya. Menyebut
+                  rentang yang benar lebih berguna daripada satu angka yang
+                  terlihat pasti tapi salah. */}
+              <br />
+              Satu job biasanya 10&ndash;25 menit, tergantung panjang rekaman dan
+              berapa klip yang dihasilkan.
             </>
           )}
           {job.retryCount > 0 && (

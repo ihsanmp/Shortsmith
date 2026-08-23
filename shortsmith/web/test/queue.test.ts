@@ -230,6 +230,17 @@ async function main() {
   cek("job ketiga punya 2 job di depannya", Number(pos[0].posisi) === 2,
       `posisi=${pos[0].posisi}`);
 
+  // Job yang SEDANG dikerjakan harus ikut dihitung. Sebelumnya tidak, sehingga
+  // job yang menunggu di belakang satu job berjalan terbaca berposisi nol --
+  // dan halaman project menuduh agent-nya mati padahal ia sedang sibuk.
+  await q(sql`DELETE FROM jobs`);
+  await buat({ umur: "30 seconds" });
+  await q<{ id: string }>(claimNextJobSql());
+  const q5 = await buat({ umur: "10 seconds" });
+  const pos2 = await q<{ posisi: number }>(queuePositionSql(q5));
+  cek("job di belakang job yang sedang jalan berposisi 1",
+      Number(pos2[0].posisi) === 1, `posisi=${pos2[0].posisi}`);
+
   await client.close();
 
   console.log(`\n${lulus} lolos, ${gagal} gagal`);

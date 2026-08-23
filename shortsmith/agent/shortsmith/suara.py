@@ -152,6 +152,30 @@ def ratakan_edl(edl) -> int:
         nilai = [ukur(src, c.in_, c.out) for c in cuts]
         for c, g in zip(cuts, ratakan(nilai)):
             c.gain_db = g
+
+        # Gain musik dihitung DI SINI, memakai pengukuran yang sudah ada.
+        #
+        # Kenyaringan ucapan baru saja diukur untuk perataan di atas; mengukur
+        # ulang berarti menjalankan ebur128 kedua kali atas audio yang sama.
+        # Dan tempat ini benar secara urutan: musik sudah menempel di EDL, dan
+        # ucapannya sudah rata -- jadi yang dijadikan acuan adalah tingkat
+        # akhir, bukan tingkat sebelum diratakan.
+        musik = getattr(edl, "music", None)
+        hidup = [x for x in nilai if x is not None]
+        if musik is not None and hidup:
+            t, v = profil_lagu(musik.src)
+            if v:
+                # Bagian tengah lagu, bukan seluruhnya: intro dan ekor yang
+                # memudar menarik rata-ratanya turun, dan yang akan terdengar
+                # adalah bagian yang dipilih pilih_bagian -- bukan intronya.
+                tengah = [
+                    x for x, tt in zip(v, t)
+                    if 0.1 * t[-1] <= tt <= 0.9 * t[-1]
+                ] or v
+                musik.gain_db = gain_musik_untuk(
+                    float(np.median(tengah)), float(np.median(hidup)), musik.gain_db
+                )
+
         return sum(1 for c in cuts if c.gain_db)
     except Exception:  # noqa: BLE001
         log.warning("perataan suara dilewati", exc_info=True)
@@ -249,3 +273,43 @@ def pilih_bagian(src: str, durasi: float) -> float:
             - BOBOT_RAGAM * float(np.std(vv[tt < durasi])),
         )
     return terbaik
+
+
+# Seberapa jauh musik latar berada DI BAWAH ucapan, dalam LU.
+#
+# Angka ini yang menggantikan gain tetap, dan alasannya terukur. Gain tetap
+# -20 dB mengandaikan lagu dan rekaman berada di tingkat yang mirip. Pada satu
+# pasangan nyata keduanya berjauhan 17 LU::
+#
+#     ucapan di video    -23,4 LUFS
+#     badan lagu          -6,4 LUFS   <- di-master jauh lebih keras
+#     gain -20 dB    ->  musik -26,4 LUFS, hanya 3,0 LU di bawah ucapan
+#
+# Tiga LU praktis sama kerasnya: musiknya bersaing dengan yang bicara, bukan
+# menemaninya. Delapan belas adalah tengah dari patokan umum 15-20 LU untuk
+# musik latar di bawah ucapan.
+SEPARASI_LU = 18.0
+
+# Batas keras gain, dalam dB. Lagu yang direkam sangat pelan tidak dinaikkan
+# sampai deraunya ikut terdengar, dan lagu yang sangat keras tidak dipotong
+# sampai hilang sama sekali.
+GAIN_MIN_DB = -42.0
+GAIN_MAKS_DB = -12.0
+
+
+def gain_musik_untuk(lagu_lufs: float | None, ucapan_lufs: float | None,
+                     bawaan: float = -20.0) -> float:
+    """Gain lagu supaya ia duduk SEPARASI_LU di bawah ucapan.
+
+    Kembalikan `bawaan` kalau salah satu tidak terukur — menebak dari satu sisi
+    saja lebih buruk daripada memakai angka yang sudah dikenal.
+    """
+    if lagu_lufs is None or ucapan_lufs is None:
+        return bawaan
+    gain = (ucapan_lufs - SEPARASI_LU) - lagu_lufs
+    gain = max(GAIN_MIN_DB, min(GAIN_MAKS_DB, gain))
+    log.info(
+        "gain lagu dihitung: ucapan %.1f, lagu %.1f -> %.1f dB (terpisah %.1f LU)",
+        ucapan_lufs, lagu_lufs, gain, ucapan_lufs - (lagu_lufs + gain),
+    )
+    return round(gain, 1)

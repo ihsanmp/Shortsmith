@@ -58,6 +58,41 @@ def _write_json(path: Path, model) -> None:
     path.write_text(model.model_dump_json(indent=2, by_alias=True), encoding="utf-8")
 
 
+def siapkan_musik(
+    music: str | None, profile: ConceptProfile, gain_db: float
+) -> Music | None:
+    """Rakit objek Music, atau None kalau tidak ada lagu yang dipilih.
+
+    ## Kenapa fungsi tersendiri
+
+    Dua format EDL membutuhkannya, dan sebelum ini hanya SATU yang punya. Musik
+    dibangun di dalam `build_edl`, sementara `build_overlay_edl` dipanggil dari
+    tempat lain dan tidak pernah menerimanya — jadi lagu yang dipilih pengguna
+    hilang diam-diam di seluruh jenis video yang memakai format overlay, yaitu
+    short dan podcast.
+
+    Menaruhnya di satu tempat membuat kelalaian yang sama tidak bisa terulang:
+    jalur mana pun yang butuh musik memanggil fungsi ini, bukan menyalin
+    langkah-langkahnya.
+    """
+    sumber = music or profile.music_path
+    if not sumber:
+        return None
+
+    # Path MUTLAK. Renderer menjalankan ffmpeg dengan cwd di work dir, jadi path
+    # relatif -- yang mungkin datang dari `profile.music_path` -- gagal dibuka di
+    # sana dengan pesan "No such file or directory" yang menunjuk berkas yang
+    # jelas-jelas ada.
+    from .suara import pilih_bagian
+
+    jalur = str(Path(sumber).resolve())
+    # Bagian lagunya dipilih dari panjang video, bukan selalu dari detik nol.
+    # Alasan dan ukurannya ada di pilih_bagian.
+    mulai = pilih_bagian(jalur, profile.target_duration())
+    log.info("musik: %s @ %.0f dB, mulai %.0f detik", Path(sumber).name, gain_db, mulai)
+    return Music(src=jalur, gain_db=gain_db, mulai=mulai)
+
+
 def build_edl(
     plan: CutPlan,
     vmap: ProjectMap,
@@ -114,24 +149,7 @@ def build_edl(
     # Kekerasannya tetap datang dari jenis video lewat parameter, bukan angka
     # tetap di sini — walau ketiga jenis yang tersisa sama-sama memakai -20 dB,
     # yaitu latar yang terdengar tanpa menutupi ucapan.
-    music_obj = None
-    sumber_musik = music or profile.music_path
-    if sumber_musik:
-        # Diubah jadi path MUTLAK. Renderer menjalankan ffmpeg dengan cwd di
-        # work dir, jadi path relatif -- yang mungkin datang dari
-        # `profile.music_path` -- akan gagal dibuka di sana dengan pesan "No
-        # such file or directory" yang menunjuk berkas yang jelas-jelas ada.
-        from .suara import pilih_bagian
-
-        jalur_musik = str(Path(sumber_musik).resolve())
-        # Bagian lagunya dipilih dari panjang video, bukan selalu dari detik
-        # nol. Alasan dan ukurannya ada di pilih_bagian.
-        music_obj = Music(
-            src=jalur_musik,
-            gain_db=music_gain_db,
-            mulai=pilih_bagian(jalur_musik, profile.target_duration()),
-        )
-        log.info("musik: %s @ %.0f dB", Path(sumber_musik).name, music_gain_db)
+    music_obj = siapkan_musik(music, profile, music_gain_db)
 
     # Rasio keluaran mengikuti konsep, bukan angka tetap di config. Konsep
     # "clipper 3:4" dan "vlog 9:16" bisa hidup berdampingan tanpa saling
@@ -419,7 +437,11 @@ def run(
         from .overlay import build_overlay_edl
 
         edl = build_overlay_edl(
-            plan, vmap, profile, concept_id=profile.nama, music=music_obj
+            plan,
+            vmap,
+            profile,
+            concept_id=profile.nama,
+            music=siapkan_musik(music, profile, music_gain_db)
         )
         renderer_name = renderer_name or "overlay"
         for i, s in enumerate(edl.video, 1):

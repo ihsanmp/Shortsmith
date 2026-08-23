@@ -117,7 +117,13 @@ def build_edl(
     music_obj = None
     sumber_musik = music or profile.music_path
     if sumber_musik:
-        music_obj = Music(src=str(sumber_musik), gain_db=music_gain_db)
+        # Diubah jadi path MUTLAK. Renderer menjalankan ffmpeg dengan cwd di
+        # work dir, jadi path relatif -- yang mungkin datang dari
+        # `profile.music_path` -- akan gagal dibuka di sana dengan pesan "No
+        # such file or directory" yang menunjuk berkas yang jelas-jelas ada.
+        music_obj = Music(
+            src=str(Path(sumber_musik).resolve()), gain_db=music_gain_db
+        )
         log.info("musik: %s @ %.0f dB", Path(sumber_musik).name, music_gain_db)
 
     # Rasio keluaran mengikuti konsep, bukan angka tetap di config. Konsep
@@ -405,7 +411,9 @@ def run(
     if pakai_overlay:
         from .overlay import build_overlay_edl
 
-        edl = build_overlay_edl(plan, vmap, profile, concept_id=profile.nama)
+        edl = build_overlay_edl(
+            plan, vmap, profile, concept_id=profile.nama, music=music_obj
+        )
         renderer_name = renderer_name or "overlay"
         for i, s in enumerate(edl.video, 1):
             log.info("      %2d. t=%6.2f (%4.1fs) <- %s @ %.2f",

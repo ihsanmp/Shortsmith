@@ -226,8 +226,31 @@ class OverlayRenderer(Renderer):
             SETTINGS.ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
             "-f", "concat", "-safe", "0", "-i", daftar_video,
             "-f", "concat", "-safe", "0", "-i", daftar_audio,
+        ]
+
+        # Musik latar. Sampai perbaikan ini, jalur overlay MENGABAIKANNYA
+        # sepenuhnya: `OverlayEDL` punya field `music`, tapi tidak ada satu pun
+        # kode di sini yang membacanya -- jadi lagu yang dipilih pengguna hilang
+        # tanpa satu baris pun peringatan. Yang terlihat di log cuma "lagu:
+        # <nama berkas>", dan itu ditulis daemon sebelum berkasnya diserahkan.
+        pakai_musik = edl.music is not None
+        if pakai_musik:
+            # -stream_loop -1: lagu yang lebih pendek dari videonya diulang,
+            # bukan berhenti di tengah dan meninggalkan sisanya sunyi.
+            cmd += ["-stream_loop", "-1", "-i", edl.music.src]
+            total = edl.total_duration
+            mulai_fade = max(0.0, total - edl.music.fade_out)
+            graph.append(
+                f"[2:a]volume={edl.music.gain_db}dB,"
+                f"afade=t=out:st={mulai_fade:.2f}:d={edl.music.fade_out:.2f}[m]"
+            )
+            # normalize=0 penting: tanpa itu amix menurunkan volume suara utama
+            # untuk memberi ruang pada musik, dan ucapannya ikut mengecil.
+            graph.append("[1:a][m]amix=inputs=2:duration=first:normalize=0[a]")
+
+        cmd += [
             "-filter_complex", ";".join(graph),
-            "-map", "[v]", "-map", "1:a:0",
+            "-map", "[v]", "-map", "[a]" if pakai_musik else "1:a:0",
             # Jalur gambar disusun agar sama panjang dengan jalur suara, tapi
             # pembulatan frame bisa menyisakan selisih puluhan milidetik.
             # -shortest memotongnya di titik terpendek, jadi tidak pernah ada

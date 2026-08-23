@@ -35,6 +35,7 @@ from .models import (
     Adegan,
     AudioSpine,
     ConceptProfile,
+    Music,
     Cut,
     CutPlan,
     OverlayEDL,
@@ -571,6 +572,7 @@ def build_overlay_edl(
     *,
     concept_id: str,
     seed: int | None = None,
+    music: Music | None = None,
 ) -> OverlayEDL:
     """Rakit OverlayEDL dari rencana potongan suara + klip yang tersedia."""
     suara = vmap.videos[0]
@@ -657,7 +659,15 @@ def build_overlay_edl(
         video=slots,
         captions=captions,
         caption_style=profile.caption,
-        music=None,  # selalu kosong: musik ditambahkan manual setelah render
+        # Dulu di sini tertulis `music=None` dengan alasan "musik ditambahkan
+        # manual setelah render". Itu benar sampai form punya pemilih lagu --
+        # sejak itu, baris ini diam-diam membuang berkas yang sengaja dipilih
+        # pengguna, dan tidak ada yang memperbaruinya.
+        #
+        # Yang membuatnya sulit terlihat: daemon MENCATAT "lagu: <nama>" di log
+        # sebelum menyerahkannya, jadi log tampak meyakinkan sementara hasilnya
+        # sunyi.
+        music=music,
     )
 
     celah = edl.celah()

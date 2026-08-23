@@ -38,6 +38,18 @@ const RASIO_OUT = [
  * sebuah cabang yang tidak pernah diambil, label "(wajib)" yang tidak pernah
  * muncul, dan validasi yang tidak pernah menolak apa pun.
  */
+/**
+ * Ekstensi yang menentukan aliran apa yang ada di dalam sebuah berkas.
+ *
+ * Cerminan dari EKST_VIDEO dan EKST_AUDIO di agent/shortsmith/daemon.py. Kalau
+ * salah satunya berubah, yang satunya harus ikut -- kalau tidak, berkas yang
+ * terdaftar agent tidak akan pernah muncul di pemilih mana pun di sini.
+ */
+const EKST_VIDEO = new Set(["mp4", "mov", "mkv", "avi", "webm", "m4v"]);
+const EKST_AUDIO = new Set(["mp3", "wav", "m4a", "aac", "flac", "ogg", "opus"]);
+
+const ekstensi = (nama: string) => nama.split(".").pop()?.toLowerCase() ?? "";
+
 const NAMA_JENIS: Record<
   JenisVideo,
   { badge: string; judul: string; sub: string }
@@ -211,6 +223,42 @@ export default function NewProjectPage() {
   // lalu pilih berkas — dan itu dua langkah untuk satu keputusan. Sekarang
   // berkasnya didaftar langsung, dikelompokkan menurut folder asalnya.
   const kelompok = (folderInfo?.folders ?? []).filter((f) => f.berkas.length > 0);
+
+  // Tiap pemilih menyaring sendiri apa yang bisa ia pakai.
+  //
+  // Sebelumnya ketiganya memakai `kelompok` apa adanya, sehingga daftar lagu
+  // muncul di pemilih rekaman suara, berkas mp3 muncul di daftar klip B-roll
+  // -- padahal B-roll adalah gambar dan mp3 tidak punya gambar sama sekali --
+  // dan pemilih lagu menampilkan seluruh folder video.
+  //
+  // Dua sinyal dipakai, dan keduanya sudah ada tanpa perlu menebak:
+  //
+  //   EKSTENSI  memberi tahu aliran apa yang ADA di dalam berkas. Berkas .mp3
+  //             tidak punya gambar, titik. Ini fakta, bukan perkiraan.
+  //   FOLDER    adalah klasifikasi yang dibuat pengguna sendiri. Folder "Lagu"
+  //             berisi lagu karena ia yang menaruhnya di sana; memakai itu
+  //             berarti menghormati penataannya, bukan menerka maksudnya.
+  const saring = (
+    boleh: (nama: string, folder: string) => boolean,
+  ) =>
+    kelompok
+      .map((g) => ({ ...g, berkas: g.berkas.filter((b) => boleh(b.nama, g.path)) }))
+      .filter((g) => g.berkas.length > 0);
+
+  const adalahVideo = (n: string) => EKST_VIDEO.has(ekstensi(n));
+  const adalahAudio = (n: string) => EKST_AUDIO.has(ekstensi(n));
+  const folderLagu = (f: string) => f.toLowerCase() === "lagu";
+
+  /** B-roll: harus punya gambar. Berkas audio tidak punya apa pun untuk ditampilkan. */
+  const kelompokVideo = saring((n) => adalahVideo(n));
+
+  /** Rekaman suara: apa pun yang bisa memuat ucapan, kecuali folder lagu. */
+  const kelompokSuara = saring(
+    (n, f) => (adalahVideo(n) || adalahAudio(n)) && !folderLagu(f),
+  );
+
+  /** Lagu: berkas audio di mana pun, plus apa pun yang ditaruh di folder lagu. */
+  const kelompokLagu = saring((n, f) => adalahAudio(n) || folderLagu(f));
 
   // Folder yang TERBACA agent tapi belum ada isinya.
   //
@@ -473,8 +521,8 @@ export default function NewProjectPage() {
                   id="pilih-suara"
                   nilai={pilihSuara ? kunci(pilihSuara) : ""}
                   placeholder="— pilih berkas —"
-                  disabled={busy || kelompok.length === 0}
-                  opsi={kelompok.flatMap((g) =>
+                  disabled={busy || kelompokSuara.length === 0}
+                  opsi={kelompokSuara.flatMap((g) =>
                     g.berkas.map((b) => ({
                       nilai: `${g.path}/${b.nama}`,
                       judul: b.nama,
@@ -487,7 +535,7 @@ export default function NewProjectPage() {
                     })),
                   )}
                   onPilih={(v) => {
-                    const semua = kelompok.flatMap((g) =>
+                    const semua = kelompokSuara.flatMap((g) =>
                       g.berkas.map((b) => ({ ...b, folder: g.path })),
                     );
                     setPilihSuara(semua.find((b) => kunci(b) === v) ?? null);
@@ -499,10 +547,10 @@ export default function NewProjectPage() {
                 </p>
 
                 <label style={{ marginTop: 20 }}>Klip B-roll (boleh banyak, opsional)</label>
-                {kelompok.length === 0 ? (
+                {kelompokVideo.length === 0 ? (
                   <p className="hint">Tidak ada video di folder bahan agent.</p>
                 ) : (
-                  kelompok.map((g) => (
+                  kelompokVideo.map((g) => (
                     <div key={g.path} style={{ marginBottom: 12 }}>
                       <p className="hint mono" style={{ marginBottom: 4 }}>
                         {g.path || "(folder utama)"}
@@ -654,7 +702,7 @@ export default function NewProjectPage() {
             Lagu (opsional)
           </label>
 
-          {asal === "lokal" && kelompok.length > 0 ? (
+          {asal === "lokal" && kelompokLagu.length > 0 ? (
             // Di mode lokal, lagunya dipilih dari folder bahan yang sama —
             // agent membacanya di tempat, tanpa satu byte pun naik ke internet.
             <Dropdown
@@ -663,7 +711,7 @@ export default function NewProjectPage() {
               disabled={busy}
               opsi={[
                 { nilai: "", judul: "— tanpa lagu —" },
-                ...kelompok.flatMap((g) =>
+                ...kelompokLagu.flatMap((g) =>
                   g.berkas.map((b) => ({
                     nilai: `${g.path}/${b.nama}`,
                     judul: b.nama,
@@ -674,7 +722,7 @@ export default function NewProjectPage() {
               ]}
               onPilih={(v) => {
                 if (!v) return setLagu(null);
-                const semua = kelompok.flatMap((g) =>
+                const semua = kelompokLagu.flatMap((g) =>
                   g.berkas.map((b) => ({ ...b, folder: g.path })),
                 );
                 const b = semua.find((x) => kunci(x) === v);

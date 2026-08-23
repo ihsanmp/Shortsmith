@@ -5,6 +5,7 @@ import { assets, conceptProfiles, projects } from "@/db/schema";
 import { isAgentAuthorized, unauthorized } from "@/lib/auth";
 import { claimNextJob, reapStaleJobs } from "@/lib/jobs";
 import { buildKey, presignDownload, presignUpload } from "@/lib/storage";
+import { ambilTugas } from "@/lib/tugas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,14 @@ export async function GET(request: Request) {
   await reapStaleJobs();
 
   const job = await claimNextJob();
-  if (!job) return Response.json({ job: null }, { status: 200 });
+  if (!job) {
+    // Tidak ada job — sekalian tawarkan tugas, supaya daemon cukup SATU
+    // permintaan per putaran. Lihat lib/tugas.ts untuk angkanya: dua endpoint
+    // yang ditanya bergantian membuat 84% lalu lintas API hanyalah daemon
+    // menanyakan hal yang sama dua kali, dan itu menjenuhkan pooler koneksi
+    // sampai permintaan pengguna sendiri berakhir 504.
+    return Response.json({ job: null, tugas: await ambilTugas() }, { status: 200 });
+  }
 
   if (job.tipe === "render") {
     return Response.json({ job: await buildRenderPayload(job) });

@@ -237,11 +237,23 @@ def write_ass(
     alignment = _ALIGNMENT.get(style.posisi, 2)
     margin_v = _MARGIN_V.get(style.posisi, 320)
 
+    # WrapStyle 0 = pembungkusan cerdas, baris dipecah merata.
+    #
+    # Sebelumnya 2, yang di ASS berarti TIDAK ADA pembungkusan otomatis sama
+    # sekali: baris sepanjang apa pun dibiarkan lurus sampai keluar bingkai.
+    # Terukur pada caption nyata "DELOID MENGELUARKAN MITIGASI TENTANG BLACK"
+    # di bingkai 1080 lebar::
+    #
+    #     WrapStyle 2   kolom    0-1072   menyentuh kedua tepi, terpotong
+    #     WrapStyle 0   kolom  162- 921   muat, jadi dua baris
+    #
+    # Ini bukan soal ukuran font atau jumlah kata: berapa pun batasnya, satu
+    # kalimat panjang tetap akan menabrak tepi selama pembungkusannya mati.
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
 PlayResY: {height}
-WrapStyle: 2
+WrapStyle: 0
 ScaledBorderAndShadow: yes
 YCbCr Matrix: TV.709
 

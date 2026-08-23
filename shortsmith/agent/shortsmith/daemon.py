@@ -208,11 +208,17 @@ class Daemon:
 
     def _ambil_tugas(self) -> bool:
         """Kerjakan satu tugas singkat kalau ada. True kalau ada yang dikerjakan."""
-        try:
-            t = self.api.next_tugas()
-        except Exception as exc:  # noqa: BLE001
-            log.warning("gagal mengambil tugas (%s)", exc)
-            return False
+        # Utamakan tugas yang sudah ikut terbawa jawaban `next_job` — ia sudah
+        # diambil dari antrean, jadi bertanya lagi berarti satu permintaan
+        # tambahan untuk sesuatu yang sudah ada di tangan.
+        didukung, t = self.api.ambil_tugas_menempel()
+        if not didukung:
+            # Server belum mengenal jalur gabungan — tanya terpisah seperti dulu.
+            try:
+                t = self.api.next_tugas()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("gagal mengambil tugas (%s)", exc)
+                return False
         if not t:
             return False
 

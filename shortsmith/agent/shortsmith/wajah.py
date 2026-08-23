@@ -329,6 +329,13 @@ FPS_LACAK = 5
 # getaran itu jadi guncangan kamera yang terlihat jelas di hasil.
 HALUS = 5
 
+# Panjang jendela median untuk membuang pencilan, dalam sampel.
+#
+# Lima memberi toleransi dua sampel buruk berturut-turut. Lebih panjang mulai
+# memotong gerakan cepat yang memang nyata; lebih pendek tidak cukup untuk
+# kesalahan deteksi yang kebetulan terjadi dua frame beruntun.
+JENDELA_MEDIAN = 5
+
 # Kalau seluruh pergerakan wajah lebih kecil dari ini (pecahan lebar gambar),
 # bingkainya DIAM.
 #
@@ -397,8 +404,8 @@ def lacak(
     # diisi tebakan — titik yang ada saja yang dipakai, dan renderer melakukan
     # interpolasi lurus di antaranya. Menebak posisi wajah yang tidak terlihat
     # berisiko menggerakkan bingkai ke tempat yang salah.
-    xs = _haluskan([p[1] for p in titik])
-    ys = _haluskan([p[2] for p in titik])
+    xs = _tapis([p[1] for p in titik])
+    ys = _tapis([p[2] for p in titik])
     jalur = [(t, x, y) for (t, _, _), x, y in zip(titik, xs, ys)]
 
     if max(xs) - min(xs) < AMBANG_GERAK and max(ys) - min(ys) < AMBANG_GERAK:
@@ -406,6 +413,46 @@ def lacak(
         return [(0.0, jalur[tengah][1], jalur[tengah][2])]
 
     return jalur
+
+
+def _tapis(nilai: list[float]) -> list[float]:
+    """Buang pencilan lebih dulu dengan median, baru haluskan dengan rata-rata.
+
+    ## Kenapa rata-rata saja tidak cukup
+
+    Detektor wajah sesekali mengunci wajah LAIN selama satu frame, atau
+    menghasilkan kecocokan palsu. Itu bukan getaran kecil — ia lompatan besar.
+    Terukur pada satu slot nyata, posisi vertikal wajah::
+
+        t=3,4   0,294
+        t=3,6   0,592     <- satu sampel, melompat 0,3 dalam 0,2 detik
+        t=3,8   0,292
+
+    Rata-rata bergerak tidak membuang sampel itu; ia MENGOLESKANNYA ke seluruh
+    jendela. Satu frame buruk menarik jalur dari 0,30 ke 0,39 dan bertahan satu
+    detik penuh — di hasil jadi, itu terlihat sebagai kamera yang tiba-tiba
+    tersentak lalu kembali.
+
+    Median kebal terhadap satu pencilan: ia memilih nilai tengah, dan nilai
+    tengah dari empat sampel baik plus satu sampel buruk tetap sampel baik.
+
+    Terukur pada data yang sama, simpangan maksimum dari garis dasar
+    sebenarnya::
+
+        rata-rata saja      0,093   (9% lebar bingkai, terlihat)
+        median lalu rata2   0,011   (1%, tidak terlihat)
+
+    Rata-ratanya tetap dipakai SETELAH median, karena median saja meninggalkan
+    tangga-tangga kecil di antara nilai yang berdekatan.
+    """
+    n = len(nilai)
+    if n < 3:
+        return list(nilai)
+    r = JENDELA_MEDIAN // 2
+    tengah = [
+        float(np.median(nilai[max(0, i - r) : min(n, i + r + 1)])) for i in range(n)
+    ]
+    return _haluskan(tengah)
 
 
 def _haluskan(nilai: list[float]) -> list[float]:

@@ -57,7 +57,42 @@ class ApiClient:
         if res.status_code == 401:
             raise ApiError("X-Agent-Key ditolak server. Periksa AGENT_KEY di kedua sisi.")
         res.raise_for_status()
-        return res.json().get("job")
+        data = res.json()
+
+        # Jawaban yang sama ikut membawa tugas kalau tidak ada job. Disimpan di
+        # sini supaya daemon tidak perlu bertanya lagi lewat permintaan kedua —
+        # dua endpoint yang ditanya bergantian tiap sepuluh detik terukur
+        # menjadi 84% seluruh lalu lintas API, dan menjenuhkan pooler koneksi
+        # sampai permintaan pengguna sendiri berakhir 504.
+        #
+        # `None` berarti server belum mengenal jalur gabungan ini; daemon lalu
+        # jatuh kembali ke `next_tugas()` seperti sebelumnya.
+        # Dicatat TERPISAH: apakah field-nya ADA, dan apa isinya.
+        #
+        # Keduanya bisa sama-sama None dengan arti yang berbeda — "server belum
+        # mengenal jalur gabungan" lawan "server mendukung, tapi antreannya
+        # kosong". Versi pertama menyamakan keduanya, sehingga daemon tetap
+        # memanggil /api/tugas/next tiap putaran dan penghematannya tidak pernah
+        # terjadi: terukur 15 panggilan tersisa setelah perbaikan yang gagal itu.
+        self._tugas_didukung = "tugas" in data
+        self._tugas_menempel = data.get("tugas")
+        return data.get("job")
+
+    def ambil_tugas_menempel(self) -> tuple[bool, dict[str, Any] | None]:
+        """(didukung, tugas) dari jawaban `next_job` terakhir.
+
+        `didukung` menjawab "perlukah bertanya lagi lewat permintaan kedua?".
+        Tanpa nilai itu, antrean kosong tidak bisa dibedakan dari server lama,
+        dan daemon selalu bertanya dua kali.
+
+        Dikonsumsi sekali: memanggilnya dua kali untuk satu jawaban akan membuat
+        tugas yang sama dikerjakan dua kali.
+        """
+        didukung = getattr(self, "_tugas_didukung", False)
+        t = getattr(self, "_tugas_menempel", None)
+        self._tugas_didukung = False
+        self._tugas_menempel = None
+        return didukung, t
 
     def next_tugas(self, timeout: int = 30) -> dict[str, Any] | None:
         """Ambil satu tugas singkat (menulis prompt / memeriksa klip).

@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import signal
 import threading
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,28 @@ HEARTBEAT_INTERVAL = 30
 POLL_KOSONG = 10  # jeda saat antrean kosong
 POLL_ERROR = 30  # jeda setelah error jaringan
 LAPOR_FOLDER_INTERVAL = 300  # seberapa sering daftar folder dikirim ulang
+
+# Tanda bahwa kuota model habis, bukan bahwa job-nya rusak.
+#
+# Perbedaannya menentukan: job yang rusak memang pantas dicoba ulang lalu
+# ditandai gagal. Kuota yang habis tidak membaik dalam hitungan menit, jadi tiga
+# percobaan beruntun cuma menghanguskan jatah percobaan job itu -- dan
+# pengguna melihat "gagal permanen" untuk pekerjaan yang sebenarnya baik-baik
+# saja dan hanya perlu ditunggu.
+#
+# Terjadi sungguhan: satu job podcast lima klip menghabiskan kuota sesi, lalu
+# gagal permanen dalam beberapa menit tanpa satu pun percobaannya punya peluang.
+_POLA_KUOTA = re.compile(
+    r"session limit|usage limit|rate.?limit|quota|api_error_status\D{0,4}429|429",
+    re.I,
+)
+
+# Berapa lama menunggu sebelum mencoba lagi saat kuota habis, dan berapa lama
+# menyerah. Sepuluh menit cukup pendek untuk menyambar begitu kuota pulih, dan
+# batas tiga jam mencegah daemon menunggu selamanya kalau ternyata kuotanya
+# tidak akan pulih hari itu.
+KUOTA_JEDA = 600
+KUOTA_MAKS = 3 * 3600
 
 # Akhiran berkas yang dianggap bahan.
 #
@@ -288,13 +311,31 @@ class Daemon:
         mulai = time.time()
 
         try:
-            with Heartbeat(self.api, job_id) as hb:
-                if tipe == "render":
-                    hasil = self._render(job, hb)
-                elif tipe == "profile_extraction":
-                    hasil = self._ekstrak_profil(job, hb)
-                else:
-                    raise RuntimeError(f"Tipe job tidak dikenal: {tipe}")
+            batas_kuota = time.time() + KUOTA_MAKS
+            while True:
+                try:
+                    with Heartbeat(self.api, job_id) as hb:
+                        if tipe == "render":
+                            hasil = self._render(job, hb)
+                        elif tipe == "profile_extraction":
+                            hasil = self._ekstrak_profil(job, hb)
+                        else:
+                            raise RuntimeError(f"Tipe job tidak dikenal: {tipe}")
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    # Kuota habis BUKAN kegagalan job. Ditunggu di sini, di
+                    # dalam job yang sama, supaya jatah percobaannya utuh dan
+                    # pekerjaan yang sudah jalan (transkrip, deteksi adegan,
+                    # pelabelan) tidak diulang dari nol.
+                    if not _POLA_KUOTA.search(str(exc)) or time.time() > batas_kuota:
+                        raise
+                    log.warning(
+                        "kuota model habis — menunggu %d menit lalu mencoba lagi "
+                        "(job ini TIDAK dihitung gagal)",
+                        KUOTA_JEDA // 60,
+                    )
+                    if self.berhenti.wait(KUOTA_JEDA):
+                        raise
 
             res = self.api.report_done(job_id, **hasil)
             log.info("selesai dalam %.0f detik (status server: %s)",

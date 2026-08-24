@@ -17,11 +17,35 @@ Akibat nyatanya:
 
 Tokoh adalah properti KANAL, bukan properti satu project. Karena itu disimpan.
 
+## Kenapa dikunci per konsep, dan bukan satu catatan untuk semua
+
+Versi pertama menyimpan satu "utama" dan satu "pendukung" untuk SELURUH mesin.
+Itu membaca "properti kanal" seolah-olah cuma ada satu kanal.
+
+Terbukti salah pada pemakaian nyata. Wajah yang dicatat 2026-08-17 dari sebuah
+video trading dipakai sebagai rujukan untuk podcast yang sama sekali lain, dan
+akibatnya terbaca di log::
+
+    tokoh utama dari memori: Berani Ambil Aksi
+    tokoh pendukung dari memori: ... (0 adegan cocok)
+    hanya 1 adegan menampilkan tokoh yang sama (dari 150)
+
+Muncul 20 kali. Penyaringannya tidak pernah sekali pun berhasil: rujukannya
+orang yang memang tidak ada di bahan mana pun.
+
+Konsep adalah pendekatan terdekat untuk "kanal" yang benar-benar ada di data —
+satu konsep diturunkan dari satu video contoh, dan video yang dibuat dari konsep
+yang sama memang berasal dari kanal yang sama. Jadi kuncinya konsep.
+
+Itu memperkecil kerusakan, tapi tidak menghapusnya: satu konsep yang sama bisa
+dipakai untuk tamu yang berbeda. Karena itu pemanggilnya masih WAJIB memeriksa
+apakah yang diingat memang muncul di bahan sekarang — lihat `_saring_tokoh` di
+overlay.py. Memori di sini adalah usulan, bukan keputusan.
+
 ## Cara kerjanya
 
 Saat pertama kali dikenali, tokoh langsung dicatat di berkas ini. Render-render
-berikutnya memakai catatan itu dan tidak menebak lagi. Tidak ada langkah setup
-yang harus dijalankan pengguna — memori terisi sendiri dari pekerjaan pertama.
+berikutnya memakai catatan itu selama masih cocok dengan bahannya.
 
 Beberapa vektor disimpan per tokoh, bukan satu rata-rata. Wajah orang yang sama
 terlihat sangat berbeda antara menunduk, tertawa, dan menyamping; merata-ratakan
@@ -49,6 +73,11 @@ MAKS_POSE = 8
 
 BERKAS = Path("tokoh.json")
 
+# Dipakai saat pemanggil tidak menyebut konsep. Bukan pengganti diam-diam untuk
+# perilaku global yang lama: kunci ini tetap terpisah dari konsep mana pun, jadi
+# ia tidak bisa bocor ke project yang punya konsep.
+KANAL_BAWAAN = "_tanpa_konsep"
+
 
 @dataclass
 class Tokoh:
@@ -70,7 +99,15 @@ def _berkas() -> Path:
     return (SETTINGS.work_dir.parent / BERKAS).resolve()
 
 
-def muat() -> dict[str, Tokoh]:
+def _baca() -> dict[str, dict]:
+    """Seluruh isi berkas, sudah dalam bentuk berkunci-konsep.
+
+    Berkas versi lama berbentuk datar (`{"utama": {...}}`) tanpa konsep. Isinya
+    TIDAK dipindahkan ke konsep mana pun: tidak ada cara mengetahui konsep mana
+    yang dulu mencatatnya, dan menebak berarti mengulang persis bug yang
+    pengunciannya dibuat untuk memperbaiki. Ia diabaikan, dan alasannya dicatat
+    supaya tidak terbaca sebagai memori yang hilang tanpa sebab.
+    """
     p = _berkas()
     if not p.exists():
         return {}
@@ -79,9 +116,25 @@ def muat() -> dict[str, Tokoh]:
     except (OSError, json.JSONDecodeError) as exc:
         log.warning("memori tokoh tidak terbaca (%s) — dikenali ulang", exc)
         return {}
+    if not isinstance(mentah, dict):
+        return {}
 
+    if any(isinstance(v, dict) and "sidik" in v for v in mentah.values()):
+        log.info(
+            "memori tokoh versi lama (tanpa konsep) diabaikan — tokoh dikenali "
+            "ulang dan dicatat per konsep"
+        )
+        return {}
+    return {k: v for k, v in mentah.items() if isinstance(v, dict)}
+
+
+def muat(kanal: str = "") -> dict[str, Tokoh]:
+    """Tokoh yang diingat untuk satu konsep. Kosong kalau belum ada."""
+    isi = _baca().get(kanal or KANAL_BAWAAN, {})
     hasil: dict[str, Tokoh] = {}
-    for peran, d in mentah.items():
+    for peran, d in isi.items():
+        if not isinstance(d, dict):
+            continue
         sidik = d.get("sidik") or []
         if sidik:
             hasil[peran] = Tokoh(
@@ -93,13 +146,14 @@ def muat() -> dict[str, Tokoh]:
     return hasil
 
 
-def catat(peran: str, sidik: list[list[float]], catatan: str = "") -> None:
-    """Simpan tokoh. Menimpa catatan lama untuk peran yang sama."""
+def catat(peran: str, sidik: list[list[float]], catatan: str = "", kanal: str = "") -> None:
+    """Simpan tokoh. Menimpa catatan lama untuk peran yang sama di konsep ini."""
     if not sidik:
         return
+    kunci = kanal or KANAL_BAWAAN
     p = _berkas()
-    semua = {k: v.to_json() for k, v in muat().items()}
-    semua[peran] = Tokoh(
+    semua = _baca()
+    semua.setdefault(kunci, {})[peran] = Tokoh(
         peran=peran,
         catatan=catatan,
         sidik=[list(map(float, s)) for s in sidik[:MAKS_POSE]],
@@ -114,4 +168,7 @@ def catat(peran: str, sidik: list[list[float]], catatan: str = "") -> None:
         log.warning("tidak bisa menyimpan memori tokoh: %s", exc)
         return
 
-    log.info("tokoh %s diingat: %s (%d pose) -> %s", peran, catatan or "tanpa label", len(sidik), p.name)
+    log.info(
+        "tokoh %s diingat untuk konsep %s: %s (%d pose) -> %s",
+        peran, kunci, catatan or "tanpa label", len(sidik), p.name,
+    )

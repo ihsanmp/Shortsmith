@@ -471,7 +471,7 @@ def _identitas_terbesar(adegan: list[Adegan]) -> list[Adegan]:
     return terbesar if len(terbesar) >= MIN_PENDUKUNG else []
 
 
-def _saring_tokoh(adegan: list[Adegan], suara: VideoMap) -> list[Adegan]:
+def _saring_tokoh(adegan: list[Adegan], suara: VideoMap, kanal: str = "") -> list[Adegan]:
     """Buang adegan yang menampilkan ORANG LAIN, bukan tokoh video ini.
 
     Satu video shorts menceritakan satu orang. Klip yang menampilkan wajah asing
@@ -485,6 +485,28 @@ def _saring_tokoh(adegan: list[Adegan], suara: VideoMap) -> list[Adegan]:
     Diukur pada bahan pengguna, dari 135 adegan: 19 menampilkan tokoh utama, 46
     menampilkan orang lain, sisanya tanpa wajah — jadi penyaringan ini membuang
     sepertiga bahan dan menyisakan 89, masih jauh lebih banyak dari jumlah slot.
+
+    ## Kenapa memori tidak lagi menang begitu saja
+
+    Sebelum ini, tokoh yang diingat dipakai TANPA diperiksa, dengan alasan tokoh
+    adalah properti kanal. Alasannya benar; pelaksanaannya tidak — memorinya satu
+    untuk seluruh mesin, jadi wajah dari video pertama yang pernah dikenali
+    dipakai untuk semua video sesudahnya, termasuk yang orangnya lain.
+
+    Terbaca di log produksi, 20 kali pada satu job::
+
+        tokoh utama dari memori: Berani Ambil Aksi
+        tokoh pendukung dari memori: ... (0 adegan cocok)
+        hanya 1 adegan menampilkan tokoh yang sama (dari 150)
+
+    Bahannya podcast dengan narasumber yang sama sekali berbeda. Sistemnya gagal
+    dengan aman — penyaringan dilewati saat sisanya terlalu sedikit, jadi
+    hasilnya tidak rusak — tapi fiturnya tidak pernah sekali pun bekerja.
+
+    Sekarang rujukannya selalu diturunkan ulang dari rekaman suara project ini
+    (enam frame, murah), dan memori hanya dipakai kalau ia memang orang yang
+    sama. Kalau sama, keduanya digabung: memori membawa pose yang tidak
+    tertangkap enam sampel hari ini, dan itulah gunanya menyimpan.
     """
     from . import tokoh as memori
     from .wajah import bisa_kenal, orang_sama, rujukan_tokoh
@@ -492,19 +514,49 @@ def _saring_tokoh(adegan: list[Adegan], suara: VideoMap) -> list[Adegan]:
     if not bisa_kenal():
         return adegan
 
-    diingat = memori.muat()
+    diingat = memori.muat(kanal)
+    ingat_utama = diingat.get("utama")
 
-    # Memori menang atas penurunan ulang. Tokoh adalah properti kanal, bukan
-    # properti satu project — lihat tokoh.py untuk kenapa itu penting.
-    if "utama" in diingat:
-        rujukan = diingat["utama"].sidik
-        log.info("tokoh utama dari memori: %s", diingat["utama"].catatan or "tanpa catatan")
-    else:
-        rujukan = rujukan_tokoh(
-            suara.media.path, suara.media.durasi, crop=suara.media.crop
+    # Rekaman suara adalah rujukan yang paling bisa dipercaya untuk "siapa video
+    # ini": orangnya di sana sepanjang durasi, dan memang suaranya yang dipakai.
+    turunan = rujukan_tokoh(
+        suara.media.path, suara.media.durasi, crop=suara.media.crop
+    )
+
+    if turunan and ingat_utama and orang_sama(turunan[0], ingat_utama.sidik):
+        rujukan = ingat_utama.sidik + turunan
+        log.info(
+            "tokoh utama cocok dengan memori: %s (%d pose diingat + %d dari bahan ini)",
+            ingat_utama.catatan or "tanpa catatan", len(ingat_utama.sidik), len(turunan),
         )
-        if rujukan:
-            memori.catat("utama", rujukan, Path(suara.media.path).stem)
+    elif turunan:
+        rujukan = turunan
+        if ingat_utama:
+            log.info(
+                "tokoh utama di bahan ini bukan yang diingat (%s) — memori diperbarui",
+                ingat_utama.catatan or "tanpa catatan",
+            )
+            # Tokoh pendukung ikut dibuang, bukan cuma yang utama.
+            #
+            # Keduanya dicatat dari bahan yang sama. Kalau ternyata tokoh
+            # utamanya orang lain, catatan pendukungnya berasal dari video yang
+            # lain juga — dan ia bisa tetap "cocok" di sini hanya karena orang
+            # itu kebetulan ikut muncul sebagai wajah asing. Terbukti saat
+            # diuji: tanpa pembuangan ini, kelima adegan wajah asing justru
+            # LOLOS sebagai tokoh pendukung.
+            diingat.pop("pendukung", None)
+        memori.catat("utama", rujukan, Path(suara.media.path).stem, kanal)
+    elif ingat_utama:
+        # Wajah pembicara tidak terbaca sama sekali, jadi tidak ada yang bisa
+        # dibandingkan. Memori dipakai apa adanya — itu satu-satunya yang ada,
+        # dan penyaringan yang terlalu ketat ditangkap penjaga di bawah.
+        rujukan = ingat_utama.sidik
+        log.info(
+            "wajah pembicara tidak terbaca — memakai tokoh dari memori: %s",
+            ingat_utama.catatan or "tanpa catatan",
+        )
+    else:
+        rujukan = []
 
     if not rujukan:
         log.warning(
@@ -525,20 +577,39 @@ def _saring_tokoh(adegan: list[Adegan], suara: VideoMap) -> list[Adegan]:
     # masuk akan jadi rombongan orang asing bergantian, persis yang penyaringan
     # ini dibuat untuk cegah. Yang benar-benar tokoh kedua hanya satu kelompok
     # besar (17 adegan); sisanya ekor panjang orang yang lewat sekali.
-    if "pendukung" in diingat:
-        kenal = diingat["pendukung"].sidik
-        pendukung = [a for a in lain if a.sidik and orang_sama(a.sidik, kenal)]
-        log.info(
-            "tokoh pendukung dari memori: %s (%d adegan cocok)",
-            diingat["pendukung"].catatan or "tanpa catatan", len(pendukung),
-        )
-    else:
+    #
+    # Yang diingat diperiksa dulu, tidak langsung dipakai. Tokoh pendukung tidak
+    # punya penurunan mandiri seperti tokoh utama punya rekaman suara, jadi satu-
+    # satunya cara mengetahui catatannya masih berlaku adalah menghitung berapa
+    # adegan yang benar-benar cocok. Nol berarti orangnya tidak ada di bahan ini,
+    # dan memakainya berarti tidak memakai tokoh pendukung sama sekali.
+    ingat_pendukung = diingat.get("pendukung")
+    pendukung: list[Adegan] = []
+    if ingat_pendukung:
+        pendukung = [
+            a for a in lain if a.sidik and orang_sama(a.sidik, ingat_pendukung.sidik)
+        ]
+        if len(pendukung) < MIN_PENDUKUNG:
+            log.info(
+                "tokoh pendukung yang diingat (%s) hampir tidak muncul di bahan ini "
+                "(%d adegan) — dicari ulang dari bahan",
+                ingat_pendukung.catatan or "tanpa catatan", len(pendukung),
+            )
+            pendukung, ingat_pendukung = [], None
+        else:
+            log.info(
+                "tokoh pendukung dari memori: %s (%d adegan cocok)",
+                ingat_pendukung.catatan or "tanpa catatan", len(pendukung),
+            )
+
+    if not ingat_pendukung:
         pendukung = _identitas_terbesar(lain)
         if pendukung:
             memori.catat(
                 "pendukung",
                 [a.sidik for a in pendukung if a.sidik],
                 pendukung[0].label or "",
+                kanal,
             )
 
     simpan = utama + pendukung
@@ -550,11 +621,16 @@ def _saring_tokoh(adegan: list[Adegan], suara: VideoMap) -> list[Adegan]:
     # dan memaksakannya menghasilkan gambar yang sama berulang-ulang, yang lebih
     # buruk daripada sesekali menampilkan orang lain. Dikatakan terus terang.
     if len(simpan) < MIN_ADEGAN_TERSISA:
+        # Sarannya menyebut SIAPA yang dicari. Versi lama cuma bilang "tambah
+        # klip yang menampilkan orangnya", dan saat rujukannya sendiri yang
+        # salah — orang dari video lain — saran itu menyuruh pengguna mengejar
+        # sesuatu yang tidak akan pernah menolong.
         log.warning(
-            "hanya %d adegan menampilkan tokoh yang sama (dari %d) — terlalu "
-            "sedikit untuk menyusun timeline, jadi penyaringan dilewati. "
-            "Tambah klip yang menampilkan orangnya untuk hasil yang menyatu.",
-            len(simpan), len(adegan),
+            "hanya %d adegan menampilkan %s (dari %d) — terlalu sedikit untuk "
+            "menyusun timeline, jadi penyaringan dilewati. Tambah klip yang "
+            "menampilkan orang itu; kalau yang dicari memang bukan dia, hapus "
+            "tokoh.json supaya dikenali ulang.",
+            len(simpan), Path(suara.media.path).stem, len(adegan),
         )
         return adegan
 
@@ -622,7 +698,7 @@ def build_overlay_edl(
             "Unggah klip di kolom 'Klip B-roll', atau pakai konsep format satu jalur."
         )
 
-    adegan = _saring_tokoh(adegan, suara)
+    adegan = _saring_tokoh(adegan, suara, concept_id)
 
     slots = susun_broll(
         total,

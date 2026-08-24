@@ -38,7 +38,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .identitas import model_untuk
+from .identitas import model_untuk, sebab_gagal
 from .warna import _luma, ukur
 
 log = logging.getLogger(__name__)
@@ -192,7 +192,7 @@ def _minta_penilaian(
     )
     if proc.returncode != 0:
         raise PenilaiError(
-            f"`claude -p` gagal (exit {proc.returncode}): {proc.stderr[-300:]}"
+            f"`claude -p` gagal (exit {proc.returncode}): {sebab_gagal(proc)}"
         )
 
     teks = json.loads(proc.stdout).get("result") or ""

@@ -40,7 +40,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .identitas import model_untuk
+from .identitas import model_untuk, sebab_gagal
 from .veo import VeoError, hasilkan, rasio_terdekat
 
 log = logging.getLogger(__name__)
@@ -146,7 +146,7 @@ def _tulis_prompt(
     )
     if proc.returncode != 0:
         raise PemasokError(
-            f"`claude -p` gagal (exit {proc.returncode}): {proc.stderr[-300:]}"
+            f"`claude -p` gagal (exit {proc.returncode}): {sebab_gagal(proc)}"
         )
 
     teks = json.loads(proc.stdout).get("result") or ""

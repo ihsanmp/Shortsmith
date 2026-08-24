@@ -34,7 +34,7 @@ import logging
 import shutil
 import subprocess
 
-from .identitas import model_untuk
+from .identitas import model_untuk, sebab_gagal
 from .models import Adegan, PlannedCut, Word
 
 log = logging.getLogger(__name__)
@@ -150,7 +150,7 @@ def _minta_penataan(
         timeout=BATAS_DETIK,
     )
     if proc.returncode != 0:
-        raise PenataError(f"`claude -p` gagal (exit {proc.returncode}): {proc.stderr[-300:]}")
+        raise PenataError(f"`claude -p` gagal (exit {proc.returncode}): {sebab_gagal(proc)}")
 
     teks = (json.loads(proc.stdout).get("result") or "")
     awal, akhir = teks.find("{"), teks.rfind("}")

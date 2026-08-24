@@ -33,6 +33,7 @@ tetap ada demi kompatibilitas dengan konfigurasi lama.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 
@@ -159,3 +160,50 @@ def model_untuk(nama: str) -> str:
 
     khusus = os.environ.get(f"SHORTSMITH_MODEL_{nama.upper()}", "").strip()
     return khusus or ident.model
+
+
+def sebab_gagal(proc) -> str:
+    """Kenapa satu panggilan `claude -p` gagal, dari jawaban yang benar-benar ada.
+
+    ## Kenapa ini perlu ada
+
+    Ketiga pemanggil dulu melaporkan `proc.stderr[-300:]`. Itu masuk akal untuk
+    program biasa, tapi salah untuk `claude -p --output-format json`: alasannya
+    ditulis ke STDOUT sebagai JSON, dan stderr sering kosong.
+
+    Akibatnya terbaca di log produksi, 17 kali dalam satu job::
+
+        pelabel gagal untuk satu kelompok (`claude -p` gagal (exit 1): ) — dilewati
+
+    Tanda kurung yang kosong itu adalah seluruh keterangan yang ada. Kegagalannya
+    ditangani dengan benar — adegan tanpa label tetap dipakai — tapi tidak ada
+    satu pun petunjuk apakah itu kuota habis, model salah, atau jaringan putus,
+    jadi tidak ada yang bisa diperbaiki.
+
+    Diperiksa langsung terhadap `claude -p` yang gagal: exit 1, stdout memuat
+    ``{"is_error": true, "result": "There's an issue with the selected model
+    (...)", "terminal_reason": "api_error"}``, dan stderr hanya ``[claude-code:
+    unrecognized_model] {...}``. Yang berguna ada di stdout.
+
+    Urutannya: `result` dari JSON, lalu stdout mentah kalau bukan JSON (crash
+    sebelum amplopnya terbentuk), lalu stderr sebagai jaring terakhir.
+    """
+    keluar = (getattr(proc, "stdout", "") or "").strip()
+    galat = (getattr(proc, "stderr", "") or "").strip()
+
+    pesan = ""
+    sebab = ""
+    try:
+        amplop = json.loads(keluar)
+    except (ValueError, TypeError):
+        # Bukan JSON sama sekali: prosesnya jatuh sebelum sempat menulis amplop.
+        pesan = keluar[-300:]
+    else:
+        if isinstance(amplop, dict):
+            pesan = str(amplop.get("result") or "").strip()[:300]
+            sebab = str(
+                amplop.get("terminal_reason") or amplop.get("subtype") or ""
+            ).strip()
+
+    bagian = [b for b in (sebab, pesan or galat[-300:]) if b]
+    return " — ".join(bagian) or "tanpa keterangan (stdout dan stderr kosong)"

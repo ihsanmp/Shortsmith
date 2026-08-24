@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 from .config import SETTINGS
-from .identitas import model_untuk
+from .identitas import model_untuk, sebab_gagal
 from .models import ConceptProfile, CutPlan, PlannedCut, ProjectMap
 
 log = logging.getLogger(__name__)
@@ -393,8 +393,12 @@ def _call_via_cli(prompt: str) -> CutPlan:
         ) from exc
 
     if proc.returncode != 0:
-        ekor = (proc.stderr or proc.stdout or "").strip()[-1200:]
-        raise DecisionError(f"`claude -p` gagal (exit {proc.returncode}):\n{ekor}")
+        # stdout dipilah, bukan disalin mentah: `claude -p --output-format json`
+        # menulis alasannya sebagai satu field di dalam amplop JSON, dan 1200
+        # karakter JSON mentah menenggelamkan kalimat yang sebenarnya berguna.
+        raise DecisionError(
+            f"`claude -p` gagal (exit {proc.returncode}): {sebab_gagal(proc)}"
+        )
 
     try:
         amplop = json.loads(proc.stdout)

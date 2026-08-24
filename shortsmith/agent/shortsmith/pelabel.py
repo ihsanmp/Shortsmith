@@ -34,7 +34,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .config import SETTINGS
-from .identitas import model_untuk
+from .identitas import model_untuk, sebab_gagal
 from .models import Adegan
 
 log = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ def _minta_label(berkas: list[tuple[int, Path]]) -> dict[int, str]:
         timeout=BATAS_DETIK,
     )
     if proc.returncode != 0:
-        raise PelabelError(f"`claude -p` gagal (exit {proc.returncode}): {proc.stderr[-300:]}")
+        raise PelabelError(f"`claude -p` gagal (exit {proc.returncode}): {sebab_gagal(proc)}")
 
     amplop = json.loads(proc.stdout)
     teks = amplop.get("result") or ""

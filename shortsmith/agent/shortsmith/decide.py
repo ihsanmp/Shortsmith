@@ -72,6 +72,63 @@ def _format_profile(profile: ConceptProfile) -> str:
     return "\n".join(baris)
 
 
+# Panjang satu blok transkrip, dalam detik.
+#
+# Whisper memenggal per frasa, dan hasilnya jauh lebih halus daripada yang
+# dibutuhkan siapa pun di sini. Diukur pada rekaman podcast 3.303 detik::
+#
+#     1.634 segmen, durasi median 1,80 detik, median 5 KATA per segmen
+#     isi kalimat     11.459 token   61,7%
+#     penanda waktu    7.105 token   38,3%
+#
+# Penandanya hampir sebesar isinya. Dan ketelitian sehalus itu tidak pernah
+# sampai ke hasil: batas potongan yang dipilih model langsung dirapikan
+# `rapikan_kata`, `rapikan_batas`, dan `rapikan_energi` ke jeda hening dan titik
+# berenergi rendah terdekat. Jadi desimal keduanya dibuang dua kali -- sekali
+# oleh perapian, sekali lagi oleh kisi frame.
+#
+# Delapan detik masih jauh lebih halus daripada potongan terpendek yang masuk
+# akal, jadi model tetap bisa menunjuk bagian yang ia maksud.
+BLOK_DETIK = 8.0
+
+# Jeda selebar ini memisahkan blok walau blok itu belum penuh. Di sanalah
+# pembicara berganti napas atau berganti gagasan, dan menyatukan dua sisi jeda
+# panjang jadi satu blok menghapus batas yang justru paling berguna.
+BLOK_JEDA = 0.6
+
+
+def _transkrip(segments) -> list[str]:
+    """Transkrip yang sudah dipadatkan jadi blok, satu baris per blok.
+
+    Menggabungkan segmen TIDAK membuang satu kata pun: teksnya disambung apa
+    adanya, dan yang hilang cuma penanda waktu di tengah blok -- penanda yang
+    ketelitiannya memang tidak pernah dipakai. Lihat BLOK_DETIK untuk ukurannya.
+    """
+    blok: list[str] = []
+    mulai = akhir = None
+    isi: list[str] = []
+
+    def tutup() -> None:
+        if isi:
+            blok.append(f"[{mulai:.1f}-{akhir:.1f}] " + " ".join(isi))
+
+    for seg in segments:
+        teks = seg.text.strip()
+        if not teks:
+            continue
+        if mulai is None:
+            mulai, akhir, isi = seg.start, seg.end, [teks]
+            continue
+        if seg.end - mulai > BLOK_DETIK or seg.start - akhir > BLOK_JEDA:
+            tutup()
+            mulai, akhir, isi = seg.start, seg.end, [teks]
+        else:
+            akhir = seg.end
+            isi.append(teks)
+    tutup()
+    return blok
+
+
 def _format_map(
     vmap: ProjectMap, *, max_silences: int = 40, jeda_hening: bool = True
 ) -> str:
@@ -87,8 +144,7 @@ def _format_map(
     nama = Path(utama.media.path).name
     baris.append(f"--- VIDEO 0 (SUMBER SUARA) | {nama} | {utama.media.durasi:.1f} detik ---")
     baris.append("TRANSKRIP (format: [mulai-selesai] teks):")
-    for seg in utama.segments:
-        baris.append(f"[{seg.start:.2f}-{seg.end:.2f}] {seg.text}")
+    baris += _transkrip(utama.segments)
 
     # Daftar jeda hening gunanya cuma satu: memilih titik potong yang tidak
     # memenggal kata. Jenis yang potongannya tidak ditentukan ucapan tidak

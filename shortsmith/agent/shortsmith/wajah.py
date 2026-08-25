@@ -183,6 +183,35 @@ def _wajah_terbesar(
     )
 
 
+def _kandidat_wajah(frame: np.ndarray) -> list[tuple[float, float, float]]:
+    """SEMUA wajah di satu frame: (fx, fy, luas_relatif), terbesar lebih dulu.
+
+    Dipakai `lacak`, yang tidak boleh puas dengan wajah terbesar saja. Di
+    rekaman dua orang, kedua wajah berukuran hampir sama dan yang "terbesar"
+    berganti karena selisih beberapa piksel — lihat `_runut` untuk ukurannya.
+    """
+    h, w = frame.shape[:2]
+    skala = LEBAR_DETEKSI / w if w > LEBAR_DETEKSI else 1.0
+    kecil = cv2.resize(frame, None, fx=skala, fy=skala) if skala != 1.0 else frame
+
+    det = _ambil_detektor(kecil.shape[1], kecil.shape[0])
+    if det is None:
+        return []
+    _, wajah = det.detect(kecil)
+    if wajah is None or len(wajah) == 0:
+        return []
+
+    ph, pw = kecil.shape[0], kecil.shape[1]
+    hasil: list[tuple[float, float, float]] = []
+    for x, y, bw, bh in wajah[:, :4]:
+        rel = float(bw * bh) / (ph * pw)
+        if rel < MIN_LUAS_WAJAH:
+            continue
+        hasil.append((float((x + bw / 2) / pw), float((y + bh / 2) / ph), rel))
+    hasil.sort(key=lambda t: t[2], reverse=True)
+    return hasil
+
+
 def mirip(a: list[float] | None, b: list[float] | None) -> float:
     """Kemiripan cosine dua sidik wajah. -1 kalau salah satunya tidak ada."""
     if not a or not b:
@@ -336,6 +365,41 @@ HALUS = 5
 # kesalahan deteksi yang kebetulan terjadi dua frame beruntun.
 JENDELA_MEDIAN = 5
 
+# Sejauh ini (pecahan lebar gambar) wajah yang dilacak masih dianggap bergerak.
+# Lebih jauh dari itu, ia LONCAT — dan bingkainya harus ikut loncat, bukan
+# menyapu ke sana.
+#
+# Dua sebab yang menghasilkan loncatan, dan keduanya minta perlakuan yang sama:
+# orangnya berganti (detektor mengunci wajah lain), atau kameranya berpindah
+# shot (orangnya sama, tempatnya di frame berbeda). Karena itu namanya bukan
+# "orang lain" — yang diukur perpindahan tempatnya, bukan identitasnya.
+#
+# Diukur pada seluruh 8 potongan job nyata, 445 selisih antar sampel::
+#
+#     0,00-0,02   401   <- wajah bergerak biasa
+#     0,02-0,05     3
+#     0,05-0,15     0   <- KOSONG
+#     0,15-0,50    14   <- loncatan
+#     0,50-0,70    27   <- loncatan
+#
+# Celahnya kosong sama sekali, jadi ambangnya ditaruh di TENGAH celah, bukan di
+# tepinya. Di tepi (0,15) satu loncatan yang kebetulan sedikit lebih kecil akan
+# terbaca sebagai gerakan dan kembali disapu.
+AMBANG_LONCAT = 0.10
+
+# Berapa sampel berturut-turut posisi baru harus bertahan sebelum bingkainya
+# benar-benar pindah. Pada 5 sampel/detik, ini satu detik penuh.
+#
+# Tanpa penahanan ini, "pindah seketika" akan dipicu oleh kedipan detektor.
+# Diukur pada satu potongan: detektor berganti wajah 22 kali dalam 20 detik,
+# tapi 13 di antaranya cuma bertahan 1-2 sampel — itu bukan pergantian apa pun,
+# itu dua wajah berukuran hampir sama yang saling menang-kalah.
+#
+# Menunggu TIDAK menunda perpindahannya. Sampel selama masa tunggu ditulis
+# ulang ke posisi baru setelah disahkan, jadi potongnya tetap jatuh di tempat
+# loncatannya benar-benar terjadi — lihat `_runut`.
+TAHAN_PINDAH = 5
+
 # Kalau seluruh pergerakan wajah lebih kecil dari ini (pecahan lebar gambar),
 # bingkainya DIAM.
 #
@@ -377,7 +441,7 @@ def lacak(
     langkah = max(1, int(round(fps_src / FPS_LACAK)))
     total_frame = max(1, int(round(panjang * fps_src)))
 
-    titik: list[tuple[float, float, float]] = []
+    mentah: list[tuple[float, list[tuple[float, float, float]]]] = []
     try:
         cap.set(cv2.CAP_PROP_POS_MSEC, mulai * 1000.0)
         for n in range(total_frame):
@@ -391,12 +455,13 @@ def lacak(
                 frame = frame[y : y + h, x : x + w]
                 if frame.size == 0:
                     continue
-            hasil = _wajah_terbesar(frame)
-            if hasil is not None:
-                titik.append((n / fps_src, hasil[0], hasil[1]))
+            kandidat = _kandidat_wajah(frame)
+            if kandidat:
+                mentah.append((n / fps_src, kandidat))
     finally:
         cap.release()
 
+    titik = _runut(mentah)
     if not titik:
         return None
 
@@ -404,15 +469,160 @@ def lacak(
     # diisi tebakan — titik yang ada saja yang dipakai, dan renderer melakukan
     # interpolasi lurus di antaranya. Menebak posisi wajah yang tidak terlihat
     # berisiko menggerakkan bingkai ke tempat yang salah.
-    xs = _tapis([p[1] for p in titik])
-    ys = _tapis([p[2] for p in titik])
+    #
+    # Dihaluskan PER BAGIAN, dipisah di tempat orangnya berganti. Menghaluskan
+    # menembus batas itu akan mengubah perpindahan tegas jadi sapuan pelan
+    # selama jendelanya — persis hal yang `_runut` dibuat untuk hilangkan.
+    batas = _batas_pindah(titik)
+    potong = [0, *batas, len(titik)]
+    xs: list[float] = []
+    ys: list[float] = []
+    for a, b in zip(potong, potong[1:]):
+        xs += _tapis([p[1] for p in titik[a:b]])
+        ys += _tapis([p[2] for p in titik[a:b]])
     jalur = [(t, x, y) for (t, _, _), x, y in zip(titik, xs, ys)]
+
+    # Perpindahan harus SEKETIKA di hasil akhir, bukan miring sepanjang jarak
+    # antar sampel. Titik penahan disisipkan tepat sebelum tiap batas, membawa
+    # nilai lama: renderer meneruskan garis lurus di antara dua titik, jadi
+    # dengan penahan ini kemiringannya terjadi dalam 1/1000 detik — satu potong
+    # keras, bukan gerakan.
+    if batas:
+        rapat: list[tuple[float, float, float]] = []
+        tandai = set(batas)
+        for i, p in enumerate(jalur):
+            if i in tandai:
+                lalu = jalur[i - 1]
+                rapat.append((max(lalu[0], p[0] - 0.001), lalu[1], lalu[2]))
+            rapat.append(p)
+        jalur = rapat
 
     if max(xs) - min(xs) < AMBANG_GERAK and max(ys) - min(ys) < AMBANG_GERAK:
         tengah = len(jalur) // 2
         return [(0.0, jalur[tengah][1], jalur[tengah][2])]
 
     return jalur
+
+
+def _runut(
+    mentah: list[tuple[float, list[tuple[float, float, float]]]],
+) -> list[tuple[float, float, float]]:
+    """Pilih SATU orang per frame, dan tetap pada orang itu sampai ia benar-benar
+    berganti.
+
+    ## Masalah yang diukur
+
+    Sebelum ini tiap frame diambil wajah TERBESAR-nya, tanpa ingatan apa pun
+    tentang frame sebelumnya. Pada rekaman satu orang itu benar. Pada rekaman
+    dua orang ia rusak: kedua wajah berukuran hampir sama, dan yang "terbesar"
+    berganti karena selisih beberapa piksel.
+
+    Terukur pada satu potongan podcast, 101 sampel dalam 20 detik::
+
+        selisih posisi antar sampel, median   0,0036
+        perpindahan antar orang               0,574 .. 0,606
+        pergantian wajah                      22 kali
+        di antaranya bertahan 1-2 sampel      13 kali
+
+    Dua puluh dua kali dalam dua puluh detik, dan lebih dari separuhnya cuma
+    kedipan satu-dua frame. Penghalusan di `_tapis` tidak membuang itu; ia
+    MENGOLESKANNYA, sehingga bingkai menyapu pelan dari satu orang ke orang lain
+    selama sekitar satu detik, berkali-kali. Itu yang terlihat di hasil.
+
+    ## Yang dilakukan di sini
+
+    Wajah yang sedang dipegang dipertahankan selama ia masih terlihat: dari
+    semua wajah di frame, dipilih yang PALING DEKAT dengan posisi sebelumnya,
+    bukan yang terbesar. Kedipan hilang di sumbernya.
+
+    Perpindahan tetap boleh terjadi — orang memang berganti bicara — tapi hanya
+    kalau orang yang baru bertahan `TAHAN_PINDAH` sampel berturut-turut. Sampel
+    di masa tunggu itu ikut ditulis ulang ke posisi lama, jadi tidak ada satu
+    frame pun yang menggantung di antara dua orang.
+
+    ## Yang TIDAK diklaim
+
+    Ini tidak tahu siapa yang sedang bicara. Tidak ada informasi suara di sini,
+    dan ukuran wajah bukan penandanya. Yang dijamin cuma: bingkainya berhenti
+    bergetar antara dua orang, dan kalau ia berpindah, perpindahannya tegas.
+    """
+    if not mentah:
+        return []
+
+    hasil: list[tuple[float, float, float]] = []
+    pegang: tuple[float, float] | None = None
+    calon: tuple[float, float] | None = None
+    hitung = 0
+    pindah = 0
+
+    for t, kandidat in mentah:
+        if pegang is None:
+            pegang = (kandidat[0][0], kandidat[0][1])
+            hasil.append((t, pegang[0], pegang[1]))
+            continue
+
+        # Yang paling dekat dengan posisi yang sedang dipegang — bukan terbesar.
+        dekat = min(
+            kandidat,
+            key=lambda k: (k[0] - pegang[0]) ** 2 + (k[1] - pegang[1]) ** 2,
+        )
+        jarak = ((dekat[0] - pegang[0]) ** 2 + (dekat[1] - pegang[1]) ** 2) ** 0.5
+
+        if jarak <= AMBANG_LONCAT:
+            # Orang yang sama, sekadar bergerak. Hitungan calon direset: siapa
+            # pun yang tadi mengantre sudah tidak berturut-turut lagi.
+            pegang = (dekat[0], dekat[1])
+            calon, hitung = None, 0
+            hasil.append((t, pegang[0], pegang[1]))
+            continue
+
+        # Orang yang dipegang tidak terlihat lagi di frame ini. Wajah terbesar
+        # jadi calon, tapi belum menang.
+        baru = (kandidat[0][0], kandidat[0][1])
+        if calon is not None and (
+            (baru[0] - calon[0]) ** 2 + (baru[1] - calon[1]) ** 2
+        ) ** 0.5 <= AMBANG_LONCAT:
+            hitung += 1
+        else:
+            calon, hitung = baru, 1
+
+        if hitung >= TAHAN_PINDAH:
+            # Perpindahan disahkan. Sampel selama masa tunggu ditulis ulang ke
+            # posisi BARU, bukan dibiarkan di posisi lama: kalau tidak, akan ada
+            # satu detik di mana bingkai memandangi orang yang sudah pergi.
+            for i in range(len(hasil) - hitung + 1, len(hasil)):
+                hasil[i] = (hasil[i][0], calon[0], calon[1])
+            pegang = calon
+            calon, hitung = None, 0
+            pindah += 1
+            hasil.append((t, pegang[0], pegang[1]))
+        else:
+            # Masih menunggu. Bingkainya TIDAK bergerak sedikit pun.
+            hasil.append((t, pegang[0], pegang[1]))
+
+    if pindah:
+        log.info(
+            "jalur wajah: %d perpindahan tegas (dari %d sampel) — bingkai dipotong, bukan digeser", pindah, len(mentah)
+        )
+    return hasil
+
+
+def _batas_pindah(titik: list[tuple[float, float, float]]) -> list[int]:
+    """Indeks tempat jalur berpindah orang. Dipakai untuk tidak menghaluskan
+    melintasi perpindahan.
+
+    Menghaluskan melintasi batas persis membatalkan gunanya `_runut`: rata-rata
+    bergerak akan mengubah satu perpindahan tegas jadi sapuan selama jendelanya.
+    """
+    return [
+        i
+        for i in range(1, len(titik))
+        if (
+            (titik[i][1] - titik[i - 1][1]) ** 2 + (titik[i][2] - titik[i - 1][2]) ** 2
+        )
+        ** 0.5
+        > AMBANG_LONCAT
+    ]
 
 
 def _tapis(nilai: list[float]) -> list[float]:

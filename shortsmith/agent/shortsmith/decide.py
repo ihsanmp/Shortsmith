@@ -16,6 +16,7 @@ import subprocess
 from pathlib import Path
 
 from .config import SETTINGS
+from .benih import Benih, benih
 from .identitas import model_untuk, sebab_gagal
 from .models import ConceptProfile, CutPlan, PlannedCut, ProjectMap
 
@@ -39,30 +40,6 @@ class DecisionError(RuntimeError):
     pass
 
 
-SYSTEM_PROMPT = """\
-Kamu adalah editor short video. Tugasmu memilih potongan mana dari sebuah rekaman \
-panjang yang layak dirangkai menjadi satu short video vertikal.
-
-Aturan kerja:
-- Suara HANYA boleh diambil dari VIDEO 0. Selalu isi `sumber: 0`. Video lain \
-adalah pustaka klip yang cuma dipakai gambarnya, tidak bersuara, dan tidak \
-punya transkrip.
-- Hasil akhirnya satu topik utuh. Jangan menjahit dua bahasan berbeda hanya \
-karena keduanya sama-sama kuat — pilih satu benang, lalu ikuti sampai selesai.
-- Kamu HANYA memilih rentang waktu. Jangan menulis caption, jangan mengarang \
-narasi, jangan mengusulkan efek. Caption dibuat otomatis dari transkrip.
-- Setiap rentang harus jatuh di dalam durasi rekaman dan diambil dari transkrip \
-yang diberikan. Jangan pernah mengarang timestamp.
-- Potong di jeda hening bila memungkinkan, bukan di tengah kata. Daftar jeda \
-hening disediakan untuk itu.
-- Urutan potongan di keluaranmu adalah urutan tayang. Ia tidak harus urut \
-kronologis terhadap rekaman aslinya.
-- Potongan pertama adalah hook: ia harus berdiri sendiri dan membuat orang \
-berhenti scroll dalam 2 detik pertama.
-- `zoom` adalah punch-in halus (1.0 = tanpa zoom, 1.15 = sedikit mendekat). \
-Gunakan sesekali untuk memberi variasi visual, jangan di setiap potongan.
-- `alasan` ditulis singkat dalam Bahasa Indonesia, untuk keperluan penelusuran.
-"""
 
 
 def _format_profile(profile: ConceptProfile) -> str:
@@ -95,7 +72,9 @@ def _format_profile(profile: ConceptProfile) -> str:
     return "\n".join(baris)
 
 
-def _format_map(vmap: ProjectMap, *, max_silences: int = 40) -> str:
+def _format_map(
+    vmap: ProjectMap, *, max_silences: int = 40, jeda_hening: bool = True
+) -> str:
     """Sajikan tiap video terpisah, dengan nomor yang dipakai di field `sumber`.
 
     Transkrip sengaja TIDAK disambung jadi satu garis waktu. Menyambungnya akan
@@ -111,7 +90,14 @@ def _format_map(vmap: ProjectMap, *, max_silences: int = 40) -> str:
     for seg in utama.segments:
         baris.append(f"[{seg.start:.2f}-{seg.end:.2f}] {seg.text}")
 
-    jeda = sorted(utama.silences, key=lambda s: s.durasi, reverse=True)[:max_silences]
+    # Daftar jeda hening gunanya cuma satu: memilih titik potong yang tidak
+    # memenggal kata. Jenis yang potongannya tidak ditentukan ucapan tidak
+    # membutuhkannya, dan benihnya yang memutuskan itu -- lihat benih.py.
+    jeda = (
+        sorted(utama.silences, key=lambda s: s.durasi, reverse=True)[:max_silences]
+        if jeda_hening
+        else []
+    )
     if jeda:
         baris.append("")
         baris.append("JEDA HENING TERPANJANG (titik potong paling aman):")
@@ -171,7 +157,12 @@ def _format_fokus(brief: str, profile: ConceptProfile) -> str:
 
 
 def _build_prompt(
-    vmap: ProjectMap, profile: ConceptProfile, brief: str, *, koreksi: str | None = None
+    vmap: ProjectMap,
+    profile: ConceptProfile,
+    brief: str,
+    b: Benih,
+    *,
+    koreksi: str | None = None,
 ) -> str:
     target = profile.target_duration()
     jumlah_cut = profile.target_cuts()
@@ -181,7 +172,7 @@ def _build_prompt(
         _format_profile(profile),
         "",
         f"== VIDEO MENTAH ({len(vmap.videos)} file) ==",
-        _format_map(vmap),
+        _format_map(vmap, jeda_hening=b.sertakan_jeda),
         "",
         "== FOKUS PEMBAHASAN ==",
         _format_fokus(brief, profile),
@@ -355,7 +346,7 @@ def _extract_json(teks: str) -> dict:
         raise DecisionError(f"JSON dari model tidak bisa dibaca: {exc}") from exc
 
 
-def _call_via_cli(prompt: str) -> CutPlan:
+def _call_via_cli(prompt: str, b: Benih) -> CutPlan:
     claude = shutil.which("claude")
     if not claude:
         raise DecisionError(
@@ -363,18 +354,21 @@ def _call_via_cli(prompt: str) -> CutPlan:
             "pindah ke DECIDER=api dengan ANTHROPIC_API_KEY."
         )
 
-    penuh = f"{SYSTEM_PROMPT}\n{SKEMA_JSON}\n\n{prompt}"
+    penuh = f"{b.sistem()}\n{SKEMA_JSON}\n\n{prompt}"
 
     cmd = [
         claude, "-p",
         "--output-format", "json",
-        "--model", model_untuk("editor"),
+        "--model", model_untuk(b.identitas),
         # Tugas ini murni teks -> JSON. Tanpa tool, tidak ada yang perlu diizinkan
         # dan tidak ada risiko job menggantung menunggu konfirmasi.
         "--allowedTools", "",
     ]
 
-    log.info("memanggil `claude -p` (model %s, lewat stdin)", model_untuk("editor"))
+    log.info(
+        "memanggil `claude -p` (%s, model %s, lewat stdin)",
+        b.identitas, model_untuk(b.identitas),
+    )
     try:
         # Prompt dikirim lewat stdin, BUKAN argumen: transkrip 30 menit bisa
         # melebihi batas 32.767 karakter untuk baris perintah Windows.
@@ -424,7 +418,7 @@ def _call_via_cli(prompt: str) -> CutPlan:
 # --------------------------------------------------------------------------
 
 
-def _call_via_api(prompt: str) -> CutPlan:
+def _call_via_api(prompt: str, b: Benih) -> CutPlan:
     try:
         import anthropic
     except ImportError as exc:  # pragma: no cover
@@ -434,10 +428,10 @@ def _call_via_api(prompt: str) -> CutPlan:
 
     client = anthropic.Anthropic()
     response = client.messages.parse(
-        model=model_untuk("editor"),
+        model=model_untuk(b.identitas),
         max_tokens=16000,
         thinking={"type": "adaptive"},
-        system=SYSTEM_PROMPT,
+        system=b.sistem(),
         messages=[{"role": "user", "content": prompt}],
         output_format=CutPlan,
     )
@@ -455,28 +449,39 @@ def _call_via_api(prompt: str) -> CutPlan:
 _BACKEND = {"claude-cli": _call_via_cli, "api": _call_via_api}
 
 
-def _call_llm(prompt: str) -> CutPlan:
+def _call_llm(prompt: str, b: Benih) -> CutPlan:
     fn = _BACKEND.get(SETTINGS.decider)
     if fn is None:
         raise DecisionError(
             f"DECIDER '{SETTINGS.decider}' tidak dikenal. Pilihan: {', '.join(_BACKEND)}"
         )
-    return fn(prompt)
+    return fn(prompt, b)
 
 
-def decide(vmap: ProjectMap, profile: ConceptProfile, brief: str = "") -> CutPlan:
-    """Hasilkan rencana potongan yang sudah tervalidasi. Satu kali percobaan perbaikan."""
+def decide(
+    vmap: ProjectMap, profile: ConceptProfile, brief: str = "", jenis: str = "short"
+) -> CutPlan:
+    """Hasilkan rencana potongan yang sudah tervalidasi. Satu kali percobaan perbaikan.
+
+    `jenis` memilih BENIH editornya: aturan penyuntingan, model, dan bagian
+    konteks mana yang ikut dikirim. Tanpa ini ketiga jenis memakai satu prompt
+    yang aturannya benar untuk short saja -- lihat benih.py.
+    """
     if not any(v.segments for v in vmap.videos):
         raise DecisionError(
             "Peta video tidak punya transkrip. Tanpa transkrip tidak ada dasar untuk "
             "memilih potongan."
         )
 
+    bnh = benih(jenis)
     koreksi: str | None = None
     for percobaan in (1, 2):
-        prompt = _build_prompt(vmap, profile, brief, koreksi=koreksi)
-        log.info("meminta rencana potongan ke %s (percobaan %d)", model_untuk("editor"), percobaan)
-        plan = _call_llm(prompt)
+        prompt = _build_prompt(vmap, profile, brief, bnh, koreksi=koreksi)
+        log.info(
+            "meminta rencana potongan ke %s sebagai %s (percobaan %d)",
+            model_untuk(bnh.identitas), bnh.identitas, percobaan,
+        )
+        plan = _call_llm(prompt, bnh)
 
         masalah = _validate(plan.cuts, vmap, profile)
         if not masalah:

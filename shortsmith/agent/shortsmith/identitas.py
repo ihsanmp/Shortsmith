@@ -58,13 +58,50 @@ class Identitas:
 
 
 _DAFTAR: tuple[Identitas, ...] = (
+    # Editor dipecah per JENIS video, bukan satu peran untuk ketiganya.
+    #
+    # Aturan penyuntingan yang benar untuk short berlawanan dengan yang benar
+    # untuk podcast dan cinematic -- lihat benih.py, tempat aturan tiap jenis
+    # ditulis. Yang di sini cuma sisi modelnya, supaya masing-masing bisa
+    # ditimpa sendiri lewat SHORTSMITH_MODEL_EDITOR_SHORT dan seterusnya.
+    #
+    # Nama "editor" (tanpa jenis) DIPERTAHANKAN sebagai cadangan: konfigurasi
+    # lama yang menyetel SHORTSMITH_MODEL_EDITOR masih ada di mesin pengguna,
+    # dan menghapusnya diam-diam akan membuat setelan itu tidak berpengaruh
+    # tanpa satu pun pesan.
     Identitas(
         nama="editor",
         model=OPUS,
         tugas=(
-            "Memilih potongan mana yang dipakai dan urutannya. Satu kesalahan "
-            "penilaian di sini merusak seluruh video, dan tidak ada tahap "
-            "berikutnya yang bisa memperbaikinya."
+            "Cadangan untuk jenis video yang belum punya benih sendiri. "
+            "Pemilihan potongan yang sesungguhnya dikerjakan editor-<jenis>."
+        ),
+    ),
+    Identitas(
+        nama="editor-short",
+        model=OPUS,
+        tugas=(
+            "Memilih potongan untuk short vertikal: hook yang menghentikan "
+            "scroll, satu topik utuh. Satu kesalahan penilaian di sini merusak "
+            "seluruh video, dan tidak ada tahap berikutnya yang memperbaikinya."
+        ),
+    ),
+    Identitas(
+        nama="editor-podcast",
+        model=OPUS,
+        tugas=(
+            "Memotong satu bagian percakapan panjang jadi klip yang bisa "
+            "dimengerti sendirian. Yang dinilai bukan kekuatan dua detik "
+            "pertama melainkan keutuhan tanya-jawabnya."
+        ),
+    ),
+    Identitas(
+        nama="editor-cinematic",
+        model=OPUS,
+        tugas=(
+            "Memilih bagian yang kuat DITONTON, bukan yang bagus dibaca. "
+            "Jenis ini tanpa subtitle, jadi tidak ada teks yang menolong "
+            "kalau gambarnya tidak berdiri sendiri."
         ),
     ),
     Identitas(
@@ -158,7 +195,13 @@ def model_untuk(nama: str) -> str:
     if global_:
         return global_
 
-    khusus = os.environ.get(f"SHORTSMITH_MODEL_{nama.upper()}", "").strip()
+    # Tanda hubung di nama identitas jadi garis bawah di nama environment.
+    # "editor-short" -> SHORTSMITH_MODEL_EDITOR_SHORT. Tanpa penggantian ini
+    # namanya jadi SHORTSMITH_MODEL_EDITOR-SHORT, yang tidak bisa diset di
+    # shell mana pun -- jadi penimpaannya mustahil dipakai tanpa satu pesan
+    # pun yang menjelaskan kenapa.
+    kunci = nama.upper().replace("-", "_")
+    khusus = os.environ.get(f"SHORTSMITH_MODEL_{kunci}", "").strip()
     return khusus or ident.model
 
 

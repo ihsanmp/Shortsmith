@@ -21,6 +21,7 @@ import signal
 import threading
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -405,56 +406,76 @@ class Daemon:
 
         from .pipeline import run_banyak
 
-        klip = run_banyak(
-            sources,
-            profile,
-            output,
-            jenis=jenis,
-            brief=job.get("brief", ""),
-            job_id=job["id"],
-            music=musik,
-            music_gain_db=gain_musik(jenis),
-            on_progress=progress,
-        )
-        if not klip:
-            raise RuntimeError("Pipeline tidak menghasilkan file.")
+        # Unggahan berjalan BERBARENGAN dengan render klip berikutnya.
+        #
+        # Diukur pada job lima klip yang memakan 1.575 detik, unggahannya 714
+        # detik -- 45% -- dan seluruhnya berjalan setelah klip terakhir selesai,
+        # sementara CPU menganggur. Klip pertama sudah jadi 12 menit sebelumnya
+        # dan isinya tidak berubah lagi; menunggu adalah murni penjadwalan.
+        #
+        # Satu pekerja saja, bukan lima. Yang ditumpangkan adalah unggahan di
+        # atas render (jaringan di atas CPU), dan itu sudah menghabiskan hampir
+        # seluruh keuntungannya. Menambah pekerja berarti beberapa unggahan
+        # berebut satu jalur naik yang sama, dan tidak ada ukuran yang
+        # mendukung bahwa itu menolong.
+        hasil_unggah: dict[Path, dict] = {}
+        gagal_unggah: list[tuple[Path, int]] = []
+        antre = ThreadPoolExecutor(max_workers=1, thread_name_prefix="unggah")
+        tugas_unggah: list[tuple[Path, object]] = []
+        urut: dict[Path, int] = {}
 
-        for k in klip:
+        def unggah_nanti(k: Path) -> None:
             self._simpan_hasil(k, job)
+            i = len(tugas_unggah)
+            urut[k] = i
+            tugas_unggah.append((k, antre.submit(self._unggah_satu, k, job, i)))
 
-        hb.update(92, "mengunggah hasil")
+        try:
+            klip = run_banyak(
+                sources,
+                profile,
+                output,
+                jenis=jenis,
+                brief=job.get("brief", ""),
+                job_id=job["id"],
+                music=musik,
+                music_gain_db=gain_musik(jenis),
+                on_progress=progress,
+                on_klip=unggah_nanti,
+            )
+            if not klip:
+                raise RuntimeError("Pipeline tidak menghasilkan file.")
 
-        # Klip pertama memakai slot unggah yang sudah disertakan job. Sisanya
-        # meminta slot sendiri satu per satu -- saat job dibagikan, belum ada
-        # yang tahu berapa klip yang akan lahir darinya.
-        target = job["output"]
-        self.api.upload(klip[0], target["uploadUrl"])
-        utama = probe(klip[0])
-        ringkas = {
-            "outputKey": target["key"],
-            "namaFile": klip[0].name,
-            "ukuranBytes": klip[0].stat().st_size,
-            "durasi": round(utama.durasi, 3),
-        }
+            hb.update(92, "menyelesaikan unggahan")
+            for k, fut in tugas_unggah:
+                try:
+                    hasil_unggah[k] = fut.result()
+                except Exception as exc:  # noqa: BLE001
+                    # Klip yang gagal diunggah TIDAK menggagalkan laporan. Klip
+                    # lain sudah naik dan sudah bernilai; menggagalkan seluruh
+                    # job berarti pengguna kehilangan semuanya, dan job diulang
+                    # dari nol termasuk transkrip satu jam itu.
+                    log.warning("%s gagal diunggah (%s) — dicoba lagi nanti", k.name, exc)
+                    gagal_unggah.append((k, urut[k]))
+        finally:
+            antre.shutdown(wait=True)
 
-        tambahan = []
-        for i, k in enumerate(klip[1:], start=2):
+        # Klip yang lolos jalur latar dipakai apa adanya; yang gagal dicoba
+        # sekali lagi di sini, berurutan. Gangguan jaringan sesaat saat render
+        # sedang berjalan tidak boleh berarti klipnya hilang untuk selamanya.
+        for k, i in gagal_unggah:
             try:
-                slot = self.api.slot_output(job["id"])
-                self.api.upload(k, slot["uploadUrl"])
-                info = probe(k)
-                tambahan.append({
-                    "outputKey": slot["key"],
-                    "namaFile": k.name,
-                    "ukuranBytes": k.stat().st_size,
-                    "durasi": round(info.durasi, 3),
-                })
+                hasil_unggah[k] = self._unggah_satu(k, job, i)
+                log.info("%s berhasil diunggah pada percobaan kedua", k.name)
             except Exception as exc:  # noqa: BLE001
-                # Klip yang gagal diunggah TIDAK menggagalkan laporan. Klip
-                # pertama sudah naik dan sudah bernilai; menggagalkan seluruh
-                # job karena klip keempat berarti pengguna kehilangan semuanya,
-                # dan job diulang dari nol termasuk transkrip satu jam itu.
-                log.warning("klip %d gagal diunggah (%s) — dilewati", i, exc)
+                log.warning("%s tetap gagal diunggah (%s)", k.name, exc)
+
+        naik = [k for k in klip if k in hasil_unggah]
+        if not naik:
+            raise RuntimeError("Tidak ada satu pun klip yang berhasil diunggah.")
+
+        ringkas = dict(hasil_unggah[naik[0]])
+        tambahan = [hasil_unggah[k] for k in naik[1:]]
 
         if tambahan:
             ringkas["klipTambahan"] = tambahan
@@ -473,6 +494,32 @@ class Daemon:
             )
             return True
         return False
+
+    def _unggah_satu(self, k: Path, job: dict[str, Any], indeks: int) -> dict:
+        """Unggah satu klip dan kembalikan ringkasannya untuk laporan job.
+
+        Slotnya ditentukan `indeks`, bukan oleh urutan kedatangan di thread:
+        klip PERTAMA memakai slot yang sudah disertakan job, sisanya meminta
+        slot sendiri. Saat job dibagikan, belum ada yang tahu berapa klip yang
+        akan lahir darinya.
+
+        Permintaan slot ikut dikerjakan DI SINI, di dalam pekerja, bukan di
+        pemanggilnya. Kalau ia dipanggil di thread render, kegagalannya jatuh ke
+        penelan galat di `_lapor_klip` — dan klip itu akan hilang diam-diam
+        tanpa pernah masuk daftar yang dicoba ulang.
+        """
+        if indeks == 0:
+            slot = job["output"]
+        else:
+            slot = self.api.slot_output(job["id"])
+        self.api.upload(k, slot["uploadUrl"])
+        info = probe(k)
+        return {
+            "outputKey": slot["key"],
+            "namaFile": k.name,
+            "ukuranBytes": k.stat().st_size,
+            "durasi": round(info.durasi, 3),
+        }
 
     def _simpan_hasil(self, berkas: Path, job: dict[str, Any]) -> Path | None:
         """Salin hasil render ke folder hasil dengan nama yang bisa dibaca.

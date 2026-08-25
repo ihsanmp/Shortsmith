@@ -273,6 +273,18 @@ export const jobs = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+
+    // Pilihan topik, dipakai saat kolom topik dikosongkan pengguna.
+    //
+    // Agent membaca topik apa saja yang ada di rekaman, menaruhnya di
+    // `topikUsul`, lalu MENUNGGU sampai `topikPilih` terisi. Selama menunggu
+    // job tetap `processing` dan agent tetap berdenyut — jadi pembebas job
+    // terlantar benar untuk tidak merebutnya.
+    //
+    // `topikPilih` NULL berarti belum dijawab; array kosong berarti pengguna
+    // sengaja tidak memilih satu pun, dan itu jawaban yang sah.
+    topikUsul: jsonb("topik_usul").$type<string[]>(),
+    topikPilih: jsonb("topik_pilih").$type<string[]>(),
   },
   (t) => [
     // Antrean selalu dibaca dengan filter status + urut created_at.

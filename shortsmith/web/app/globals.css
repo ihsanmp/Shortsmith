@@ -4294,6 +4294,92 @@ body:has(.hero) {
 }
 
 /* ==========================================================================
+   Pilihan topik di tengah proses
+
+   Lebarnya jauh lebih besar daripada bilah progres yang ia gantikan: yang
+   dibaca di sini kalimat penuh, bukan satu label. Baris topik dibuat setinggi
+   sasaran sentuh yang layak, karena daftar ini juga dibuka dari HP sambil
+   menunggu.
+   ========================================================================== */
+
+.pilih-topik {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+.pilih-topik-judul {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.pilih-topik-catatan {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--ink-4);
+}
+
+.pilih-topik-daftar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pilih-topik-baris {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.pilih-topik-baris:hover {
+  border-color: var(--accent);
+}
+
+.pilih-topik-baris:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-2));
+}
+
+.pilih-topik-baris input {
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.pilih-topik-aksi {
+  display: flex;
+  justify-content: flex-start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pilih-topik-baris {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
    Pemilih jenis video
    ========================================================================== */
 .jenis-halaman {

@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { PemuatAI } from "@/components/ui/pemuat-ai";
+import { PilihTopik } from "@/components/pilih-topik";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
 import { galatDari } from "@/lib/galat";
@@ -30,7 +31,14 @@ type Status = "pending" | "processing" | "done" | "failed";
 
 type Data = {
   project: { judul: string; status: Status };
-  job: { status: Status; progress: number; tahap: string } | null;
+  job: {
+    id: string;
+    status: Status;
+    progress: number;
+    tahap: string;
+    topikUsul: string[] | null;
+    topikPilih: string[] | null;
+  } | null;
 };
 
 export default function HalamanProses({ params }: { params: Promise<{ id: string }> }) {
@@ -73,6 +81,14 @@ export default function HalamanProses({ params }: { params: Promise<{ id: string
 
   const tahap = data?.job?.tahap?.trim() || "Memproses";
   const progres = data?.job?.progress ?? 0;
+  const job = data?.job ?? null;
+
+  // Ditanyakan HANYA kalau agent sudah menaruh usulan DAN pengguna belum
+  // menjawab. `topikPilih` yang berupa array kosong adalah jawaban yang sah
+  // ("tidak satu pun"), jadi yang diperiksa null-nya, bukan panjangnya.
+  const tanya = Boolean(
+    job && job.topikUsul && job.topikUsul.length > 0 && job.topikPilih === null,
+  );
 
   return (
     <section className="proses-halaman">
@@ -96,6 +112,20 @@ export default function HalamanProses({ params }: { params: Promise<{ id: string
         <p className="proses-tahap">Agent sedang mengerjakan short ini di PC-mu.</p>
       </div>
 
+      {/* Pertanyaannya menggantikan bilah progres, bukan menempel di bawahnya.
+          Selama menunggu jawaban tidak ada yang bergerak, dan bilah yang diam
+          di sebelah pertanyaan terbaca seperti proses yang macet. */}
+      {tanya ? (
+        <PilihTopik
+          jobId={job!.id}
+          topik={job!.topikUsul!}
+          onKirim={(dipilih) =>
+            setData((d) =>
+              d?.job ? { ...d, job: { ...d.job, topikPilih: dipilih } } : d,
+            )
+          }
+        />
+      ) : (
       <div className="proses-bilah">
         <ProgressBar
           value={progres > 0 ? progres : null}
@@ -104,6 +134,7 @@ export default function HalamanProses({ params }: { params: Promise<{ id: string
           completeLabel="Render selesai"
         />
       </div>
+      )}
 
       {error ? (
         <div className="notice err" role="alert">

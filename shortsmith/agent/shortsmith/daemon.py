@@ -60,6 +60,16 @@ _POLA_KUOTA = re.compile(
 KUOTA_JEDA = 600
 KUOTA_MAKS = 3 * 3600
 
+# Menunggu pengguna mencentang topik.
+#
+# Setengah jam cukup panjang untuk orang yang sedang mengerjakan hal lain,
+# dan cukup pendek untuk tidak menahan antrean semalaman kalau ia sudah
+# menutup tabnya. Lewat batas itu SELURUH topik dibuat -- perilaku otomatis
+# yang sama dengan sebelum fitur ini ada, jadi tidak menjawab tidak pernah
+# berarti kehilangan hasil.
+TOPIK_JEDA = 5
+TOPIK_MAKS = 30 * 60
+
 # Akhiran berkas yang dianggap bahan.
 #
 # AUDIO ikut, dan itu bukan kelengkapan iseng: folder `Lagu` berisi mp3 tidak
@@ -439,6 +449,7 @@ class Daemon:
                 music_gain_db=gain_musik(jenis),
                 on_progress=progress,
                 on_klip=unggah_nanti,
+                minta_topik=lambda t: self._tanya_topik(job['id'], t, hb),
             )
             if not klip:
                 raise RuntimeError("Pipeline tidak menghasilkan file.")
@@ -482,6 +493,63 @@ class Daemon:
             )
             return True
         return False
+
+    def _tanya_topik(
+        self, job_id: str, topik: list[str], hb: Heartbeat
+    ) -> list[str] | None:
+        """Tawarkan topik ke pengguna, tunggu centangannya.
+
+        Kembalikan daftar yang dicentang, atau None kalau tidak ada jawaban --
+        dan None di sini berarti "pakai semuanya", bukan "batalkan".
+
+        ## Kenapa job tetap `processing` selama menunggu
+
+        Agent-nya memang masih hidup dan masih memegang job ini; ia cuma sedang
+        tidak menghitung apa pun. Menandainya dengan status lain berarti pembebas
+        job terlantar harus diajari pengecualian, penghitung antrean harus ikut
+        tahu, dan halaman project harus mengenal keadaan keempat. Heartbeat terus
+        berjalan, jadi tidak ada yang merebutnya.
+
+        ## Kenapa menyerah setelah setengah jam, bukan menunggu selamanya
+
+        Pengguna bisa menutup tabnya, atau menyalakan job lalu pergi. Menunggu
+        tanpa batas berarti satu job seperti itu menahan antrean semalaman.
+        Lewat batasnya, seluruh topik dibuat -- perilaku otomatis yang sama
+        dengan sebelum fitur ini ada, jadi tidak menjawab tidak pernah berarti
+        kehilangan hasil.
+        """
+        try:
+            self.api.usul_topik(job_id, topik)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("gagal mengirim daftar topik (%s) — semua topik dipakai", exc)
+            return None
+
+        log.info("%d topik dikirim ke web, menunggu pilihan pengguna:", len(topik))
+        for i, t in enumerate(topik, 1):
+            log.info("   %d. %s", i, t[:100])
+
+        batas = time.monotonic() + TOPIK_MAKS
+        while time.monotonic() < batas:
+            if self.berhenti.is_set() or hb.dibatalkan.is_set():
+                return None
+            hb.update(42, "menunggu kamu memilih topik")
+            try:
+                pilih = self.api.pilihan_topik(job_id)
+            except Exception as exc:  # noqa: BLE001
+                # Jaringan sesaat bukan alasan berhenti menunggu; putaran
+                # berikutnya menanyakannya lagi beberapa detik kemudian.
+                log.warning("gagal menanyakan pilihan topik (%s) — dicoba lagi", exc)
+                pilih = None
+            if pilih is not None:
+                log.info("pengguna memilih %d dari %d topik", len(pilih), len(topik))
+                return pilih
+            self.berhenti.wait(TOPIK_JEDA)
+
+        log.warning(
+            "tidak ada pilihan topik setelah %d menit — seluruh %d topik dibuat",
+            TOPIK_MAKS // 60, len(topik),
+        )
+        return None
 
     def _lengkapi_unggahan(
         self, klip: list[Path], hasil: dict[Path, dict], job: dict[str, Any]

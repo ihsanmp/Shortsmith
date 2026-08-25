@@ -122,6 +122,28 @@ class ApiClient:
         res.raise_for_status()
         return res.json()
 
+    def usul_topik(self, job_id: str, topik: list[str]) -> None:
+        """Kirim topik yang ditemukan di rekaman, supaya pengguna bisa memilih."""
+        res = self.session.post(
+            f"{self.base_url}/api/jobs/{job_id}/topik",
+            json={"topik": topik},
+            timeout=30,
+        )
+        res.raise_for_status()
+
+    def pilihan_topik(self, job_id: str) -> list[str] | None:
+        """Topik yang dicentang pengguna. None berarti ia belum menjawab.
+
+        Dibedakan tegas dari daftar kosong: kosong adalah jawaban yang sah
+        ("tidak satu pun"), dan memperlakukannya sama dengan "belum menjawab"
+        akan membuat agent menunggu selamanya untuk sesuatu yang sudah dijawab.
+        """
+        res = self.session.get(
+            f"{self.base_url}/api/jobs/{job_id}/topik", timeout=30
+        )
+        res.raise_for_status()
+        return res.json().get("pilih")
+
     def lapor_tugas(
         self, tugas_id: str, *, hasil: Any = None, error: str = ""
     ) -> bool:

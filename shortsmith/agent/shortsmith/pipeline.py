@@ -253,120 +253,23 @@ def build_edl(
     )
 
 
-def run_banyak(
-    sources,
-    profile,
-    output,
-    *,
-    jenis: str = "short",
-    brief: str = "",
-    job_id: str | None = None,
-    on_progress=None,
-    on_klip: Callable[[Path], None] | None = None,
-    **kw,
-) -> list[Path]:
-    """Jalankan pipeline, menghasilkan BEBERAPA klip kalau topiknya dikosongkan.
-
-    ## Kenapa klip pertama dijalankan lebih dulu, bukan semua sekaligus
-
-    Topik hanya bisa dicari setelah ada transkrip, dan transkrip baru ada
-    setelah tahap analisis berjalan. Menjalankan klip pertama seperti biasa
-    memberi keduanya sekaligus: satu video yang sudah jadi, dan peta video yang
-    dipakai untuk mencari topik sisanya.
-
-    Konsekuensinya klip pertama memakai pilihan model sendiri tanpa arahan --
-    persis perilaku sebelum fitur ini ada. Yang bertambah adalah klip-klip
-    setelahnya.
-
-    ## Kenapa ringkasan klip pertama ikut dikirim
-
-    Supaya topik yang dicari BERBEDA darinya. Tanpa itu, model kemungkinan besar
-    memilih bagian terbaik rekaman untuk klip kedua juga -- bagian yang sama
-    yang baru saja dipakai.
-    """
-    import json as _json
-
-    from .topik import boleh_dipecah, cari_topik, jumlah_klip
-
-    output = Path(output).resolve()
-    pertama = run(
-        sources, profile, output,
-        brief=brief, job_id=job_id, on_progress=on_progress, jenis=jenis, **kw,
-    )
-    if pertama is not None:
-        _lapor_klip(on_klip, pertama)
-    if pertama is None or not boleh_dipecah(jenis, brief):
-        return [pertama] if pertama else []
-
-    work = SETTINGS.ensure_work_dir(
-        job_id or f"{Path(str(sources[0] if isinstance(sources, list) else sources)).stem}"
-    )
-    peta = work / "map.json"
-    if not peta.exists():
-        return [pertama]
-
-    vmap = ProjectMap.model_validate_json(peta.read_text(encoding="utf-8"))
-    durasi = max((v.media.durasi for v in vmap.videos), default=0.0)
-    n = jumlah_klip(durasi)
-    if n <= 1:
-        return [pertama]
-
-    sudah = ""
-    rencana = work / "plan.json"
-    if rencana.exists():
-        try:
-            sudah = _json.loads(rencana.read_text(encoding="utf-8")).get("ringkasan") or ""
-        except Exception:  # noqa: BLE001
-            sudah = ""
-
-    topik = cari_topik(vmap, profile, n - 1, sudah_dipakai=sudah)
-    if not topik:
-        return [pertama]
-
-    hasil = [pertama]
-    for i, t in enumerate(topik, start=2):
-        keluar = output.with_name(f"{output.stem}-{i}{output.suffix}")
-        log.info("=== klip %d dari %d: %s", i, len(topik) + 1, t[:90])
-        try:
-            # Kegagalan satu klip TIDAK menggagalkan sisanya. Klip pertama sudah
-            # jadi dan sudah bernilai; membuang semuanya karena klip keempat
-            # gagal berarti pengguna tidak mendapat apa pun.
-            k = run(
-                sources, profile, keluar,
-                brief=t, job_id=job_id, sufiks=f"_{i}",
-                on_progress=on_progress, jenis=jenis, **kw,
-            )
-            if k:
-                hasil.append(k)
-                _lapor_klip(on_klip, k)
-        except Exception:  # noqa: BLE001
-            log.exception("klip %d gagal — dilewati", i)
-
-    log.info("%d klip dihasilkan dari satu rekaman", len(hasil))
-    return hasil
-
-
-def run(
+def siapkan_peta(
     sources: str | Path | list[str | Path],
     profile: ConceptProfile,
-    output: str | Path,
     *,
-    brief: str = "",
     job_id: str | None = None,
-    music: str | None = None,
-    music_gain_db: float = -20.0,
-    renderer_name: str | None = None,
     refresh: bool = False,
-    dry_run: bool = False,
-    sufiks: str = "",
-    jenis: str = "short",
     on_progress: Callable[[int, str], None] | None = None,
-) -> Path | None:
-    """Jalankan pipeline penuh. Kembalikan path hasil, atau None kalau dry_run.
+) -> tuple[ProjectMap, Path, str]:
+    """Analisis saja: transkrip, deteksi adegan, pelabelan. Tanpa merender apa pun.
 
-    `on_progress(persen, tahap)` dipanggil di setiap batas tahap. Daemon memakainya
-    untuk mengisi heartbeat, sehingga UI bisa menampilkan kemajuan yang sebenarnya
-    dan bukan sekadar spinner.
+    Kembalikan (peta, folder kerja, job_id).
+
+    Dipisah dari `run` karena ada yang harus terjadi DI ANTARA analisis dan
+    render: saat kolom topik dikosongkan, topik rekaman dibaca lebih dulu lalu
+    pengguna mencentang mana yang mau dibuat. Sebelum ini urutannya memaksa
+    satu klip dirender lebih dulu hanya supaya petanya ada, dan klip itu jadi
+    tanpa pernah ada yang memilih topiknya.
     """
 
     def lapor(persen: int, tahap: str) -> None:
@@ -384,7 +287,6 @@ def run(
     # itu puluhan menit untuk gambar yang justru tidak boleh dipakai.
     paths = _tanpa_ganda(paths)
 
-    output = Path(output).resolve()
     job_id = job_id or f"{paths[0].stem}_{datetime.now():%Y%m%d_%H%M%S}"
     work = SETTINGS.ensure_work_dir(job_id)
 
@@ -396,8 +298,6 @@ def run(
     # menit, dan ia bergantung pada BERKAS-nya saja -- bukan pada topik yang
     # dipilih. Dengan peta yang dipakai bersama dan rencana yang terpisah, klip
     # kedua dan seterusnya hanya membayar perencanaan dan render.
-    plan_file = work / f"plan{sufiks}.json"
-    edl_file = work / f"edl{sufiks}.json"
 
     # --- Tahap 1-2: analisis (di-cache) ---
     if map_file.exists() and not refresh:
@@ -479,6 +379,145 @@ def run(
         "      sumber suara %.0f detik + %d klip B-roll (%.0f detik gambar)",
         vmap.videos[0].media.durasi, len(klip), sum(v.media.durasi for v in klip),
     )
+
+    return vmap, work, job_id
+
+
+def run_banyak(
+    sources,
+    profile,
+    output,
+    *,
+    jenis: str = "short",
+    brief: str = "",
+    job_id: str | None = None,
+    on_progress=None,
+    on_klip: Callable[[Path], None] | None = None,
+    minta_topik: Callable[[list[str]], list[str]] | None = None,
+    **kw,
+) -> list[Path]:
+    """Jalankan pipeline, menghasilkan BEBERAPA klip kalau topiknya dikosongkan.
+
+    ## Urutannya: analisis, tanya, baru render
+
+    Versi sebelumnya merender satu klip lebih dulu, semata supaya petanya ada,
+    lalu mencari topik untuk sisanya. Akibatnya klip pertama selalu jadi tanpa
+    pernah ada yang memilih topiknya, dan pencarian topik harus dibebani arahan
+    tambahan "jangan mengulang bagian yang tadi" — mengoreksi urutan yang salah,
+    bukan memperbaikinya.
+
+    Sekarang analisis berdiri sendiri (`siapkan_peta`), topiknya dibaca dari peta
+    itu, `minta_topik` menawarkannya ke pengguna, dan render baru berjalan untuk
+    topik yang dicentang. Satu klip per topik yang dipilih.
+
+    `minta_topik` boleh None -- di CLI tidak ada yang bisa ditanyai. Tanpa ia,
+    seluruh topik yang ditemukan dipakai, persis perilaku otomatis yang lama.
+    """
+    from .topik import boleh_dipecah, cari_topik, jumlah_klip
+
+    output = Path(output).resolve()
+
+    # Topik yang diisi pengguna, atau jenis yang tidak boleh dipecah: satu klip,
+    # dan tidak ada yang perlu ditanyakan.
+    if not boleh_dipecah(jenis, brief):
+        satu = run(
+            sources, profile, output,
+            brief=brief, job_id=job_id, on_progress=on_progress, jenis=jenis, **kw,
+        )
+        if satu is not None:
+            _lapor_klip(on_klip, satu)
+        return [satu] if satu else []
+
+    vmap, work, job_id = siapkan_peta(
+        sources, profile, job_id=job_id,
+        refresh=kw.get("refresh", False), on_progress=on_progress,
+    )
+
+    durasi = max((v.media.durasi for v in vmap.videos), default=0.0)
+    topik = cari_topik(vmap, profile, jumlah_klip(durasi))
+
+    if topik and minta_topik is not None:
+        # Kegagalan bertanya TIDAK menggagalkan job. Yang hilang cuma
+        # kesempatan memilih; seluruh topik tetap dibuat, sama seperti sebelum
+        # fitur ini ada. Menjatuhkan render satu jam karena satu permintaan
+        # jaringan gagal adalah tukar-tambah yang jelas merugi.
+        try:
+            dipilih = minta_topik(topik)
+            if dipilih is not None:
+                topik = [t for t in topik if t in set(dipilih)]
+        except Exception:  # noqa: BLE001
+            log.warning("gagal menanyakan pilihan topik — semua topik dipakai", exc_info=True)
+
+    # Tidak ada topik sama sekali (rekaman pendek, atau pencariannya gagal):
+    # satu klip tanpa arahan, persis perilaku lama.
+    if not topik:
+        log.info("tidak ada topik terpilih — dibuat satu klip tanpa arahan")
+        satu = run(
+            sources, profile, output,
+            brief="", job_id=job_id, on_progress=on_progress, jenis=jenis, **kw,
+        )
+        if satu is not None:
+            _lapor_klip(on_klip, satu)
+        return [satu] if satu else []
+
+    hasil: list[Path] = []
+    for i, t in enumerate(topik, start=1):
+        keluar = output if i == 1 else output.with_name(f"{output.stem}-{i}{output.suffix}")
+        log.info("=== klip %d dari %d: %s", i, len(topik), t[:90])
+        try:
+            # Kegagalan satu klip TIDAK menggagalkan sisanya. Klip yang sudah
+            # jadi sudah bernilai; membuang semuanya karena klip keempat gagal
+            # berarti pengguna tidak mendapat apa pun, dan job diulang dari nol
+            # termasuk transkrip satu jam itu.
+            k = run(
+                sources, profile, keluar,
+                brief=t, job_id=job_id, sufiks="" if i == 1 else f"_{i}",
+                on_progress=on_progress, jenis=jenis, **kw,
+            )
+            if k:
+                hasil.append(k)
+                _lapor_klip(on_klip, k)
+        except Exception:  # noqa: BLE001
+            log.exception("klip %d gagal — dilewati", i)
+
+    log.info("%d klip dihasilkan dari satu rekaman", len(hasil))
+    return hasil
+
+
+def run(
+    sources: str | Path | list[str | Path],
+    profile: ConceptProfile,
+    output: str | Path,
+    *,
+    brief: str = "",
+    job_id: str | None = None,
+    music: str | None = None,
+    music_gain_db: float = -20.0,
+    renderer_name: str | None = None,
+    refresh: bool = False,
+    dry_run: bool = False,
+    sufiks: str = "",
+    jenis: str = "short",
+    on_progress: Callable[[int, str], None] | None = None,
+) -> Path | None:
+    """Jalankan pipeline penuh. Kembalikan path hasil, atau None kalau dry_run.
+
+    `on_progress(persen, tahap)` dipanggil di setiap batas tahap. Daemon memakainya
+    untuk mengisi heartbeat, sehingga UI bisa menampilkan kemajuan yang sebenarnya
+    dan bukan sekadar spinner.
+    """
+
+    def lapor(persen: int, tahap: str) -> None:
+        if on_progress:
+            on_progress(persen, tahap)
+
+    daftar = [sources] if isinstance(sources, (str, Path)) else list(sources)
+    output = Path(output).resolve()
+    vmap, work, job_id = siapkan_peta(
+        daftar, profile, job_id=job_id, refresh=refresh, on_progress=on_progress
+    )
+    plan_file = work / f"plan{sufiks}.json"
+    edl_file = work / f"edl{sufiks}.json"
 
     # --- Tahap 3-4: keputusan + validasi (di-cache) ---
     if plan_file.exists() and not refresh:

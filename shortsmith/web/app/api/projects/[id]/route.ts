@@ -95,6 +95,12 @@ export async function GET(_request: Request, { params }: Params) {
           heartbeatAt: job.heartbeatAt,
           posisiAntrean: posisi,
           estimasiMenit: posisi * 12,
+          // Topik yang ditawarkan agent, dan yang sudah dicentang pengguna.
+          // `topikPilih` null berarti pertanyaannya masih terbuka — itulah
+          // satu-satunya penanda yang dipakai halaman proses untuk memunculkan
+          // daftar centangnya.
+          topikUsul: job.topikUsul ?? null,
+          topikPilih: job.topikPilih ?? null,
         }
       : null,
     // `output` dipertahankan apa adanya supaya klien lama tetap jalan; yang

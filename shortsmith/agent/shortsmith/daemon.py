@@ -419,15 +419,12 @@ class Daemon:
         # berebut satu jalur naik yang sama, dan tidak ada ukuran yang
         # mendukung bahwa itu menolong.
         hasil_unggah: dict[Path, dict] = {}
-        gagal_unggah: list[tuple[Path, int]] = []
         antre = ThreadPoolExecutor(max_workers=1, thread_name_prefix="unggah")
         tugas_unggah: list[tuple[Path, object]] = []
-        urut: dict[Path, int] = {}
 
         def unggah_nanti(k: Path) -> None:
             self._simpan_hasil(k, job)
             i = len(tugas_unggah)
-            urut[k] = i
             tugas_unggah.append((k, antre.submit(self._unggah_satu, k, job, i)))
 
         try:
@@ -456,19 +453,10 @@ class Daemon:
                     # job berarti pengguna kehilangan semuanya, dan job diulang
                     # dari nol termasuk transkrip satu jam itu.
                     log.warning("%s gagal diunggah (%s) — dicoba lagi nanti", k.name, exc)
-                    gagal_unggah.append((k, urut[k]))
         finally:
             antre.shutdown(wait=True)
 
-        # Klip yang lolos jalur latar dipakai apa adanya; yang gagal dicoba
-        # sekali lagi di sini, berurutan. Gangguan jaringan sesaat saat render
-        # sedang berjalan tidak boleh berarti klipnya hilang untuk selamanya.
-        for k, i in gagal_unggah:
-            try:
-                hasil_unggah[k] = self._unggah_satu(k, job, i)
-                log.info("%s berhasil diunggah pada percobaan kedua", k.name)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("%s tetap gagal diunggah (%s)", k.name, exc)
+        self._lengkapi_unggahan(klip, hasil_unggah, job)
 
         naik = [k for k in klip if k in hasil_unggah]
         if not naik:
@@ -494,6 +482,44 @@ class Daemon:
             )
             return True
         return False
+
+    def _lengkapi_unggahan(
+        self, klip: list[Path], hasil: dict[Path, dict], job: dict[str, Any]
+    ) -> None:
+        """Unggah semua klip yang BELUM naik, berurutan. Mengisi `hasil` di tempat.
+
+        ## Kenapa daftarnya diturunkan dari `klip`, bukan dari daftar yang gagal
+
+        Versi pertama hanya mencoba ulang klip yang unggahannya melempar galat.
+        Itu melewatkan satu jalur: kalau pemberitahuan "klip selesai" gagal
+        SEBELUM sempat mengantre -- misalnya penyalinan ke folder hasil melempar
+        galat yang bukan OSError -- klip itu tidak pernah masuk daftar tugas,
+        tidak pernah masuk daftar gagal, dan hilang dari laporan tanpa satu pun
+        pesan. Pengguna melihat empat klip padahal lima dirender.
+
+        Diturunkan dari `klip`, tidak ada jalur kegagalan yang bisa lolos:
+        apa pun sebabnya, yang belum ada di `hasil` dicoba di sini.
+
+        ## Soal slot bawaan
+
+        Slot yang disertakan job hanya boleh dipakai SATU klip. Kalau ia sudah
+        terpakai di jalur latar, sisanya wajib meminta slot sendiri; kalau belum
+        -- karena klip pertama justru yang gagal -- ia masih tersedia dan dipakai
+        di sini.
+        """
+        kunci_bawaan = (job.get("output") or {}).get("key")
+        terpakai = any(r.get("outputKey") == kunci_bawaan for r in hasil.values())
+
+        for k in klip:
+            if k in hasil:
+                continue
+            indeks = 0 if not terpakai else 1
+            try:
+                hasil[k] = self._unggah_satu(k, job, indeks)
+                terpakai = terpakai or indeks == 0
+                log.info("%s berhasil diunggah pada percobaan kedua", k.name)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("%s tetap gagal diunggah (%s)", k.name, exc)
 
     def _unggah_satu(self, k: Path, job: dict[str, Any], indeks: int) -> dict:
         """Unggah satu klip dan kembalikan ringkasannya untuk laporan job.

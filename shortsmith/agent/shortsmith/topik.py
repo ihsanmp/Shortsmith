@@ -37,7 +37,7 @@ import logging
 import shutil
 import subprocess
 
-from .identitas import model_untuk
+from .identitas import model_untuk, sebab_gagal
 from .models import ConceptProfile, ProjectMap
 
 log = logging.getLogger(__name__)
@@ -167,7 +167,9 @@ def cari_topik(
             timeout=BATAS_DETIK,
         )
         if proc.returncode != 0:
-            raise TopikError(f"`claude -p` gagal (exit {proc.returncode})")
+            raise TopikError(
+                f"`claude -p` gagal (exit {proc.returncode}): {sebab_gagal(proc)}"
+            )
         teks = json.loads(proc.stdout).get("result") or ""
         awal, akhir = teks.find("{"), teks.rfind("}")
         if awal < 0 or akhir < 0:

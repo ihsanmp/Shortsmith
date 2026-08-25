@@ -42,7 +42,7 @@ import tempfile
 from pathlib import Path
 
 from .config import SETTINGS
-from .identitas import model_untuk
+from .identitas import model_untuk, sebab_gagal
 from .models import CaptionStyle
 from .probe import probe
 
@@ -179,7 +179,10 @@ def pelajari_caption(
             return None
 
         if proc.returncode != 0:
-            log.warning("pembacaan gaya caption gagal (kode %s) — memakai bawaan", proc.returncode)
+            log.warning(
+                "pembacaan gaya caption gagal (kode %s): %s — memakai bawaan",
+                proc.returncode, sebab_gagal(proc),
+            )
             return None
 
         luar = _json_dari(proc.stdout)

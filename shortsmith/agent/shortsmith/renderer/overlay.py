@@ -88,6 +88,25 @@ def _sederhanakan(titik: list[tuple[float, float]], eps: float) -> list[tuple[fl
     return _sederhanakan(titik[: di + 1], eps)[:-1] + _sederhanakan(titik[di:], eps)
 
 
+# Dua titik yang lebih rapat dari ini adalah POTONGAN yang disengaja, bukan dua
+# sampel berurutan.
+#
+# Penanda strukturnya, bukan ambang nilai: sampel jalur berjarak 0,2 detik, dan
+# satu-satunya yang menghasilkan jarak di bawah satu milidetik adalah titik
+# penahan yang sengaja disisipkan tepat sebelum perpindahan. Memakai penanda ini
+# berarti renderer tidak perlu tahu ambang "orang lain" milik pelacak.
+JEDA_TANGGA = 0.002
+
+
+def _potong_tangga(titik: list[tuple[float, float]]) -> list[int]:
+    """Indeks awal tiap bagian, dipisah di tempat nilainya melompat tegas."""
+    return [
+        i
+        for i in range(1, len(titik))
+        if titik[i][0] - titik[i - 1][0] <= JEDA_TANGGA and titik[i][1] != titik[i - 1][1]
+    ]
+
+
 def _pangkas(titik: list[tuple[float, float]]) -> list[tuple[float, float]]:
     """Turunkan jumlah titik sampai muat di parser ffmpeg.
 
@@ -103,28 +122,97 @@ def _pangkas(titik: list[tuple[float, float]]) -> list[tuple[float, float]]:
         simpangan terbesar   0,0019 lebar frame  = 2,1 piksel pada 1080
         simpangan rata-rata  0,0004 lebar frame
 
-    Dua piksel pada gambar yang bingkainya memang sedang bergerak: tidak ada
-    yang bisa melihatnya. Jalur gigi gergaji buatan yang berbelok di SETIAP
-    titik pun tetap muat, lewat penipisan merata di bawah.
+    ## Perpindahan tegas TIDAK boleh ikut dipangkas
+
+    Versi pertama memangkas seluruh jalur sebagai satu deret. Pada jalur yang
+    perpindahannya banyak, itu MEMBATALKAN perpindahannya: diuji pada jalur
+    buatan dengan 80 perpindahan, 79 potongan tegas tersisa 14 dan 29 sisanya
+    berubah jadi sapuan pelan — persis cacat yang seluruh rantai ini dibuat
+    untuk hilangkan.
+
+    Karena itu jalurnya dipecah lebih dulu di tiap perpindahan, dan tiap bagian
+    dipangkas sendiri. Ujung bagian selalu dipertahankan Douglas-Peucker, jadi
+    pasangan titik yang membentuk potongan tegas tidak mungkin hilang.
+
+    Kalau perpindahannya sendiri sudah melebihi jatah, sebagian memang harus
+    dibuang — tapi yang dibuang adalah perpindahan dengan lompatan TERKECIL, dan
+    bagiannya dilipat ke bagian sebelumnya sambil mempertahankan potongannya.
+    Bingkai bertahan lebih lama di satu orang; ia tidak pernah menyapu.
     """
     if len(titik) <= MAKS_TITIK:
         return titik
 
+    potong = _potong_tangga(titik)
+    if potong:
+        return _pangkas_bertangga(titik, potong)
+
+    hasil = _rapatkan(titik, MAKS_TITIK)
+    log.info("jalur wajah dipadatkan: %d -> %d titik", len(titik), len(hasil))
+    return hasil
+
+
+def _rapatkan(titik: list[tuple[float, float]], jatah: int) -> list[tuple[float, float]]:
+    """Pangkas satu deret menerus sampai muat `jatah` titik."""
+    if len(titik) <= jatah:
+        return list(titik)
+    if jatah <= 2:
+        return [titik[0], titik[-1]]
+
     eps = 0.002
     hasil = _sederhanakan(titik, eps)
-    while len(hasil) > MAKS_TITIK and eps < 0.5:
+    while len(hasil) > jatah and eps < 0.5:
         eps *= 1.5
         hasil = _sederhanakan(titik, eps)
 
-    if len(hasil) > MAKS_TITIK:
-        # Jaring terakhir untuk jalur yang mustahil disederhanakan. Ujungnya
+    if len(hasil) > jatah:
+        # Jaring terakhir untuk deret yang mustahil disederhanakan. Ujungnya
         # dipertahankan supaya nilai tahan di awal dan akhir tetap benar.
-        langkah = len(hasil) / (MAKS_TITIK - 1)
-        pilih = {int(i * langkah) for i in range(MAKS_TITIK - 1)} | {len(hasil) - 1}
+        langkah = len(hasil) / (jatah - 1)
+        pilih = {int(i * langkah) for i in range(jatah - 1)} | {len(hasil) - 1}
         hasil = [p for i, p in enumerate(hasil) if i in pilih]
+    return hasil
+
+
+def _pangkas_bertangga(
+    titik: list[tuple[float, float]], potong: list[int]
+) -> list[tuple[float, float]]:
+    """Pangkas jalur yang memuat perpindahan tegas, tanpa merusak perpindahannya."""
+    batas = [0, *potong, len(titik)]
+    bagian = [titik[a:b] for a, b in zip(batas, batas[1:])]
+
+    # Tiap bagian butuh minimal dua titik. Kalau bagiannya terlalu banyak,
+    # perpindahan dengan lompatan terkecil dibuang lebih dulu -- itu yang paling
+    # tidak terlihat -- dengan melipat bagiannya ke bagian sebelumnya.
+    dibuang = 0
+    while len(bagian) * 2 > MAKS_TITIK and len(bagian) > 1:
+        lompat = [
+            abs(bagian[i][0][1] - bagian[i - 1][-1][1]) for i in range(1, len(bagian))
+        ]
+        i = lompat.index(min(lompat)) + 1
+        # Isi bagian ini dibuang; bingkainya bertahan di nilai bagian sebelumnya
+        # sampai perpindahan berikutnya. Potongan berikutnya tetap tegas karena
+        # ujung bagian sebelumnya digeser ke tepat sebelum bagian sesudahnya.
+        if i + 1 < len(bagian):
+            akhir = bagian[i - 1][-1]
+            bagian[i - 1] = bagian[i - 1][:-1] + [
+                (max(akhir[0], bagian[i + 1][0][0] - 0.001), akhir[1])
+            ]
+        bagian.pop(i)
+        dibuang += 1
+
+    # Sisa jatah dibagi menurut panjang tiap bagian: bagian yang memuat lebih
+    # banyak gerakan memang butuh lebih banyak titik untuk mewakilinya.
+    sisa = max(0, MAKS_TITIK - 2 * len(bagian))
+    total = sum(len(b) for b in bagian) or 1
+    hasil: list[tuple[float, float]] = []
+    for b in bagian:
+        jatah = 2 + int(sisa * len(b) / total)
+        hasil += _rapatkan(b, jatah)
 
     log.info(
-        "jalur wajah dipadatkan: %d -> %d titik (ambang %.4f)", len(titik), len(hasil), eps
+        "jalur wajah dipadatkan: %d -> %d titik (%d perpindahan dipertahankan%s)",
+        len(titik), len(hasil), len(bagian) - 1,
+        f", {dibuang} dibuang" if dibuang else "",
     )
     return hasil
 

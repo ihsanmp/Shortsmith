@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -56,6 +57,57 @@ def load_profile(path: str | Path) -> ConceptProfile:
 
 def _write_json(path: Path, model) -> None:
     path.write_text(model.model_dump_json(indent=2, by_alias=True), encoding="utf-8")
+
+
+def _tanpa_ganda(paths: list[Path]) -> list[Path]:
+    """Buang berkas yang muncul dua kali. Urutan yang tersisa tidak berubah.
+
+    ## Kenapa rekaman suara TIDAK boleh ikut jadi klip B-roll
+
+    Peran ditentukan posisi: berkas pertama adalah sumber suara, sisanya diambil
+    gambarnya saja. Memilih berkas yang sama untuk keduanya terdengar seperti
+    "pakai rekaman itu untuk dua-duanya", tapi yang terjadi bukan itu.
+
+    Wajah pembicara sudah punya jalurnya sendiri, dan jalur itu SINKRON: slot
+    pembicara mengambil gambar dari detik yang sama dengan suara yang sedang
+    terdengar, jadi gerak bibirnya cocok (lihat `_sumber_pada` di overlay.py).
+    Adegan B-roll tidak begitu — ia diambil dari titik mana pun di berkasnya.
+
+    Jadi rekaman suara yang dimasukkan sebagai B-roll menghasilkan satu-satunya
+    hal yang dijaga ketat di seluruh modul overlay: orang yang terlihat sedang
+    mengucapkan kalimat dari menit 24 sementara yang terdengar menit 2.
+
+    ## Kenapa dibuang, bukan ditolak
+
+    Menolak job berarti pengguna harus mengirim ulang untuk sesuatu yang
+    maksudnya sudah jelas. Yang ia maksud adalah "pakai rekaman ini, tiru
+    konsepnya" — dan itu persis format satu jalur, yang akan dipilih sendiri
+    begitu daftar klipnya kosong.
+
+    Berlaku untuk SEMUA jenis video. Tidak ada jenis yang diuntungkan oleh
+    gambar pembicara yang tidak sinkron dengan suaranya.
+    """
+    terlihat: dict[str, int] = {}
+    hasil: list[Path] = []
+    for p in paths:
+        kunci = os.path.normcase(str(p))
+        if kunci in terlihat:
+            # Dua sebab yang berbeda, dan pengguna perlu tahu yang MANA. Yang
+            # pertama mengubah bentuk videonya (klipnya habis, jadi satu jalur);
+            # yang kedua cuma pemborosan yang tidak terlihat di hasil.
+            if terlihat[kunci] == 0:
+                log.info(
+                    "%s dipilih sebagai sumber suara SEKALIGUS klip B-roll — "
+                    "salinan klipnya dibuang. Wajah pembicara tetap muncul, "
+                    "lewat jalur yang sinkron dengan suaranya.",
+                    p.name,
+                )
+            else:
+                log.info("%s dipilih dua kali sebagai klip — salinannya dibuang", p.name)
+            continue
+        terlihat[kunci] = len(hasil)
+        hasil.append(p)
+    return hasil
 
 
 def siapkan_musik(
@@ -290,6 +342,12 @@ def run(
     if not paths:
         raise ValueError("Tidak ada video mentah yang diberikan.")
 
+    # Dibuang SEBELUM job_id dan peta dibentuk, bukan sesudahnya. Berkas ganda
+    # yang lolos ke sini akan dianalisis dua kali — transkrip untuk perannya
+    # sebagai sumber suara, deteksi adegan untuk perannya sebagai B-roll — dan
+    # itu puluhan menit untuk gambar yang justru tidak boleh dipakai.
+    paths = _tanpa_ganda(paths)
+
     output = Path(output).resolve()
     job_id = job_id or f"{paths[0].stem}_{datetime.now():%Y%m%d_%H%M%S}"
     work = SETTINGS.ensure_work_dir(job_id)
@@ -309,6 +367,22 @@ def run(
     if map_file.exists() and not refresh:
         log.info("[1/5] memakai peta video dari cache: %s", map_file)
         vmap = ProjectMap.model_validate_json(map_file.read_text(encoding="utf-8"))
+
+        # Peta lama bisa memuat berkas ganda yang sekarang tidak lagi diterima.
+        # Tanpa ini, job yang sudah pernah jalan dan diulang akan membangkitkan
+        # kembali bug yang baru saja ditutup — dan justru job seperti itulah yang
+        # paling mungkin diulang, karena hasilnya yang tidak sinkron.
+        unik = _tanpa_ganda([Path(v.media.path) for v in vmap.videos])
+        if len(unik) != len(vmap.videos):
+            simpan = {os.path.normcase(str(p)) for p in unik}
+            terpakai: set[str] = set()
+            sisa: list[VideoMap] = []
+            for v in vmap.videos:
+                k = os.path.normcase(str(Path(v.media.path)))
+                if k in simpan and k not in terpakai:
+                    terpakai.add(k)
+                    sisa.append(v)
+            vmap = ProjectMap(videos=sisa)
     else:
         log.info("[1/5] menganalisis %d video mentah", len(paths))
 
@@ -420,8 +494,8 @@ def run(
         pakai_overlay = profile.format == "overlay" and ada_klip
         if profile.format == "overlay" and not ada_klip:
             log.warning(
-                "konsep berformat overlay tapi tidak ada klip B-roll yang diunggah "
-                "— jatuh ke format satu jalur"
+                "konsep berformat overlay tapi tidak ada klip B-roll yang bisa "
+                "dipakai — jatuh ke format satu jalur, mengikuti konsepnya"
             )
         elif profile.format == "satu-jalur" and ada_klip:
             # Jangan diam-diam. Pengguna mengunggah klip lalu tidak melihatnya

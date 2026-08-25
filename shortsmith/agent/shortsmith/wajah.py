@@ -34,7 +34,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .kaidah import arah_pandang
+from .kaidah import AMBANG_ARAH, arah_pandang
 
 log = logging.getLogger(__name__)
 
@@ -183,8 +183,8 @@ def _wajah_terbesar(
     )
 
 
-def _kandidat_wajah(frame: np.ndarray) -> list[tuple[float, float, float]]:
-    """SEMUA wajah di satu frame: (fx, fy, luas_relatif), terbesar lebih dulu.
+def _kandidat_wajah(frame: np.ndarray) -> list[tuple[float, float, float, float]]:
+    """SEMUA wajah di satu frame: (fx, fy, luas_relatif, arah), terbesar lebih dulu.
 
     Dipakai `lacak`, yang tidak boleh puas dengan wajah terbesar saja. Di
     rekaman dua orang, kedua wajah berukuran hampir sama dan yang "terbesar"
@@ -202,12 +202,20 @@ def _kandidat_wajah(frame: np.ndarray) -> list[tuple[float, float, float]]:
         return []
 
     ph, pw = kecil.shape[0], kecil.shape[1]
-    hasil: list[tuple[float, float, float]] = []
-    for x, y, bw, bh in wajah[:, :4]:
+    hasil: list[tuple[float, float, float, float]] = []
+    for baris in wajah:
+        x, y, bw, bh = baris[:4]
         rel = float(bw * bh) / (ph * pw)
         if rel < MIN_LUAS_WAJAH:
             continue
-        hasil.append((float((x + bw / 2) / pw), float((y + bh / 2) / ph), rel))
+        # Arah hadap ikut diambil PER WAJAH, bukan sekali untuk seluruh
+        # potongan. Di rekaman dua orang yang berhadapan, keduanya menghadap ke
+        # sisi yang berlawanan -- satu angka untuk keduanya pasti salah di salah
+        # satu sisi. Kolom 4-9 berisi mata kanan, mata kiri, lalu hidung.
+        arah = arah_pandang(float(baris[4]), float(baris[6]), float(baris[8]))
+        hasil.append(
+            (float((x + bw / 2) / pw), float((y + bh / 2) / ph), rel, arah)
+        )
     hasil.sort(key=lambda t: t[2], reverse=True)
     return hasil
 
@@ -415,8 +423,8 @@ def lacak(
     mulai: float,
     panjang: float,
     crop: str = "",
-) -> list[tuple[float, float, float]] | None:
-    """Jalur wajah selama satu slot: daftar (detik_relatif, fx, fy).
+) -> list[tuple[float, float, float, float]] | None:
+    """Jalur wajah selama satu slot: daftar (detik_relatif, fx, fy, arah).
 
     Dibaca BERURUTAN dari satu titik seek, bukan seek berulang per sampel.
     Menggeser berkas video jauh lebih mahal daripada mendekode frame berikutnya,
@@ -441,7 +449,7 @@ def lacak(
     langkah = max(1, int(round(fps_src / FPS_LACAK)))
     total_frame = max(1, int(round(panjang * fps_src)))
 
-    mentah: list[tuple[float, list[tuple[float, float, float]]]] = []
+    mentah: list[tuple[float, list[tuple[float, float, float, float]]]] = []
     try:
         cap.set(cv2.CAP_PROP_POS_MSEC, mulai * 1000.0)
         for n in range(total_frame):
@@ -480,7 +488,11 @@ def lacak(
     for a, b in zip(potong, potong[1:]):
         xs += _tapis([p[1] for p in titik[a:b]])
         ys += _tapis([p[2] for p in titik[a:b]])
-    jalur = [(t, x, y) for (t, _, _), x, y in zip(titik, xs, ys)]
+    ars = _tapis_arah([p[3] for p in titik], batas)
+    jalur = [
+        (t, x, y, a)
+        for (t, _, _, _), x, y, a in zip(titik, xs, ys, ars)
+    ]
 
     # Perpindahan harus SEKETIKA di hasil akhir, bukan miring sepanjang jarak
     # antar sampel. Titik penahan disisipkan tepat sebelum tiap batas, membawa
@@ -488,25 +500,34 @@ def lacak(
     # dengan penahan ini kemiringannya terjadi dalam 1/1000 detik — satu potong
     # keras, bukan gerakan.
     if batas:
-        rapat: list[tuple[float, float, float]] = []
+        rapat: list[tuple[float, float, float, float]] = []
         tandai = set(batas)
         for i, p in enumerate(jalur):
             if i in tandai:
                 lalu = jalur[i - 1]
-                rapat.append((max(lalu[0], p[0] - 0.001), lalu[1], lalu[2]))
+                rapat.append((max(lalu[0], p[0] - 0.001), lalu[1], lalu[2], lalu[3]))
             rapat.append(p)
         jalur = rapat
 
-    if max(xs) - min(xs) < AMBANG_GERAK and max(ys) - min(ys) < AMBANG_GERAK:
+    # Bingkai boleh DIAM hanya kalau ruang pandangnya juga tidak berpindah.
+    # Kalau orangnya menoleh dari kiri ke kanan tanpa bergeser, posisinya
+    # memang tetap tapi sisi ruang kosongnya harus bertukar -- dan jalur satu
+    # titik tidak bisa menyatakan itu.
+    satu_arah = len(set(_kelas_arah(a) for a in ars)) <= 1
+    if (
+        satu_arah
+        and max(xs) - min(xs) < AMBANG_GERAK
+        and max(ys) - min(ys) < AMBANG_GERAK
+    ):
         tengah = len(jalur) // 2
-        return [(0.0, jalur[tengah][1], jalur[tengah][2])]
+        return [(0.0, jalur[tengah][1], jalur[tengah][2], jalur[tengah][3])]
 
     return jalur
 
 
 def _runut(
-    mentah: list[tuple[float, list[tuple[float, float, float]]]],
-) -> list[tuple[float, float, float]]:
+    mentah: list[tuple[float, list[tuple[float, float, float, float]]]],
+) -> list[tuple[float, float, float, float]]:
     """Pilih SATU orang per frame, dan tetap pada orang itu sampai ia benar-benar
     berganti.
 
@@ -549,16 +570,16 @@ def _runut(
     if not mentah:
         return []
 
-    hasil: list[tuple[float, float, float]] = []
-    pegang: tuple[float, float] | None = None
-    calon: tuple[float, float] | None = None
+    hasil: list[tuple[float, float, float, float]] = []
+    pegang: tuple[float, float, float] | None = None
+    calon: tuple[float, float, float] | None = None
     hitung = 0
     pindah = 0
 
     for t, kandidat in mentah:
         if pegang is None:
-            pegang = (kandidat[0][0], kandidat[0][1])
-            hasil.append((t, pegang[0], pegang[1]))
+            pegang = (kandidat[0][0], kandidat[0][1], kandidat[0][3])
+            hasil.append((t, *pegang))
             continue
 
         # Yang paling dekat dengan posisi yang sedang dipegang — bukan terbesar.
@@ -571,14 +592,16 @@ def _runut(
         if jarak <= AMBANG_LONCAT:
             # Orang yang sama, sekadar bergerak. Hitungan calon direset: siapa
             # pun yang tadi mengantre sudah tidak berturut-turut lagi.
-            pegang = (dekat[0], dekat[1])
+            # Arah IKUT diperbarui tiap sampel: orangnya sama, tapi ia memang
+            # menoleh, dan ruang pandangnya harus mengikuti.
+            pegang = (dekat[0], dekat[1], dekat[3])
             calon, hitung = None, 0
-            hasil.append((t, pegang[0], pegang[1]))
+            hasil.append((t, *pegang))
             continue
 
         # Orang yang dipegang tidak terlihat lagi di frame ini. Wajah terbesar
         # jadi calon, tapi belum menang.
-        baru = (kandidat[0][0], kandidat[0][1])
+        baru = (kandidat[0][0], kandidat[0][1], kandidat[0][3])
         if calon is not None and (
             (baru[0] - calon[0]) ** 2 + (baru[1] - calon[1]) ** 2
         ) ** 0.5 <= AMBANG_LONCAT:
@@ -591,14 +614,14 @@ def _runut(
             # posisi BARU, bukan dibiarkan di posisi lama: kalau tidak, akan ada
             # satu detik di mana bingkai memandangi orang yang sudah pergi.
             for i in range(len(hasil) - hitung + 1, len(hasil)):
-                hasil[i] = (hasil[i][0], calon[0], calon[1])
+                hasil[i] = (hasil[i][0], *calon)
             pegang = calon
             calon, hitung = None, 0
             pindah += 1
-            hasil.append((t, pegang[0], pegang[1]))
+            hasil.append((t, *pegang))
         else:
             # Masih menunggu. Bingkainya TIDAK bergerak sedikit pun.
-            hasil.append((t, pegang[0], pegang[1]))
+            hasil.append((t, *pegang))
 
     if pindah:
         log.info(
@@ -607,7 +630,82 @@ def _runut(
     return hasil
 
 
-def _batas_pindah(titik: list[tuple[float, float, float]]) -> list[int]:
+def _kelas_arah(arah: float) -> int:
+    """Ruang pandang yang dituju arah ini: -1 kiri, 0 tengah, +1 kanan.
+
+    Yang dipakai KELASNYA, bukan angkanya. `target_mendatar` hanya mengenal tiga
+    posisi, jadi arah 0,42 dan 0,83 menghasilkan bingkai yang persis sama, dan
+    memperlakukan keduanya sebagai berbeda cuma menambah titik tanpa mengubah
+    satu piksel pun.
+    """
+    if arah > AMBANG_ARAH:
+        return 1
+    if arah < -AMBANG_ARAH:
+        return -1
+    return 0
+
+
+def _tapis_arah(arah: list[float], batas: list[int]) -> list[float]:
+    """Redam arah hadap supaya ruang pandang tidak berkedip.
+
+    ## Kenapa perlu diredam terpisah dari posisi
+
+    Posisi wajah bergerak halus; arah hadap tidak. Ia diturunkan dari tiga
+    landmark dan bisa melintasi ambang 0,15 bolak-balik hanya karena kepala
+    bergoyang sedikit. Tiap lintasan menukar ruang pandang sejauh 0,20 lebar
+    keluaran -- 216 piksel pada 1080 -- jadi kedipan yang tidak terlihat di
+    angkanya menjadi lompatan bingkai yang sangat terlihat.
+
+    Median dulu, seperti posisi, lalu satu syarat tambahan: kelasnya baru
+    berganti kalau kelas baru bertahan `TAHAN_PINDAH` sampel. Yang tidak
+    bertahan dikembalikan ke kelas lama.
+
+    Batas perpindahan orang dihormati: di sana kelasnya BOLEH berganti seketika
+    tanpa menunggu, karena yang menghadap memang orang yang berbeda.
+    """
+    if not arah:
+        return []
+
+    n = len(arah)
+    r = JENDELA_MEDIAN // 2
+    halus = [
+        float(np.median(arah[max(0, i - r) : min(n, i + r + 1)])) for i in range(n)
+    ]
+
+    tandai = set(batas)
+    keluar = list(halus)
+    kelas = _kelas_arah(halus[0])
+    i = 1
+    while i < n:
+        if i in tandai:
+            # Orangnya berganti: arah orang baru berlaku langsung.
+            kelas = _kelas_arah(halus[i])
+            i += 1
+            continue
+        k = _kelas_arah(halus[i])
+        if k == kelas:
+            i += 1
+            continue
+        # Kelas baru: bertahan cukup lama, atau tidak sama sekali. Batas
+        # perpindahan orang mengakhiri hitungan -- di seberangnya orangnya lain.
+        j = i
+        while (
+            j < n
+            and j not in tandai
+            and _kelas_arah(halus[j]) == k
+        ):
+            j += 1
+        if j - i >= TAHAN_PINDAH:
+            kelas = k
+            i = j
+        else:
+            for m in range(i, j):
+                keluar[m] = halus[i - 1]
+            i = j
+    return keluar
+
+
+def _batas_pindah(titik: list[tuple[float, float, float, float]]) -> list[int]:
     """Indeks tempat jalur berpindah orang. Dipakai untuk tidak menghaluskan
     melintasi perpindahan.
 

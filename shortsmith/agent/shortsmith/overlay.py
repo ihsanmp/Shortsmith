@@ -88,7 +88,7 @@ def _jalur(src: str, awal: float, panjang: float, crop: str) -> list[list[float]
     benar tampil, bukan rata-rata seluruh adegan.
     """
     titik = lacak(src, mulai=awal, panjang=panjang, crop=crop)
-    return [[round(t, 3), round(x, 4), round(y, 4)] for t, x, y in titik] if titik else []
+    return [[round(t, 3), round(x, 4), round(y, 4), round(a, 3)] for t, x, y, a in titik] if titik else []
 
 
 def _sumber_pada(t: float, cuts: list[PlannedCut]) -> float | None:

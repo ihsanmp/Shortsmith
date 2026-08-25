@@ -211,7 +211,7 @@ def build_edl(
                 fokus_x=temuan.fokus_x if temuan else None,
                 fokus_y=temuan.fokus_y if temuan else None,
                 arah=temuan.arah if temuan else 0.0,
-                jalur=[[round(t, 3), round(x, 4), round(y, 4)] for t, x, y in titik]
+                jalur=[[round(t, 3), round(x, 4), round(y, 4), round(a, 3)] for t, x, y, a in titik]
                 if titik
                 else [],
                 **c.model_dump(by_alias=True),

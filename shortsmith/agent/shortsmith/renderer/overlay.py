@@ -156,6 +156,35 @@ def _tangga(titik: list[tuple[float, float]]) -> str:
     return f"if(lt(t,{titik[0][0]:.4f}),{titik[0][1]:.4f},{ekspresi})"
 
 
+def _langkah(titik: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Padatkan nilai yang cuma punya beberapa tingkat jadi tangga sungguhan.
+
+    Ruang pandang hanya mengenal tiga posisi (kiri, tengah, kanan). Tanpa
+    pemadatan ini, seratus sampel yang nilainya sama menghasilkan seratus
+    tingkat `if()` bersarang untuk sesuatu yang berganti dua kali -- boros, dan
+    ikut memakan jatah kedalaman parser ffmpeg yang sama dengan jalur posisi.
+
+    Yang disimpan cuma titik tempat nilainya BERGANTI, ditambah satu titik
+    penahan tepat sebelumnya yang membawa nilai lama. Penahan itulah yang
+    membuat pergantiannya jadi potongan keras: renderer meneruskan garis lurus
+    antar titik, dan garis lurus sepanjang satu milidetik tidak terlihat sebagai
+    gerakan.
+    """
+    if len(titik) < 2:
+        return list(titik)
+
+    hasil = [titik[0]]
+    for (t0, v0), (t1, v1) in zip(titik, titik[1:]):
+        if v1 == v0:
+            continue
+        hasil.append((max(t0, t1 - 0.001), v0))
+        hasil.append((t1, v1))
+    # Ujung akhir dipertahankan supaya nilainya tertahan sampai habis.
+    if hasil[-1][0] < titik[-1][0]:
+        hasil.append((titik[-1][0], hasil[-1][1]))
+    return hasil
+
+
 def posisi_crop(
     fokus_x: float | None,
     fokus_y: float | None,
@@ -185,13 +214,41 @@ def posisi_crop(
     if jalur and len(jalur) > 1:
         ex = _tangga([(p[0], p[1]) for p in jalur])
         ey = _tangga([(p[0], p[2]) for p in jalur])
+
+        # Ruang pandang MENGIKUTI WAKTU, bukan satu nilai untuk seluruh potongan.
+        #
+        # Sebelum ini `arah` adalah satu angka per potongan, diambil sebagai
+        # median seluruh sampel. Di rekaman dua orang yang berhadapan, keduanya
+        # menghadap ke sisi yang berlawanan -- jadi satu angka pasti salah di
+        # salah satu sisi. Terukur pada satu job sembilan potongan::
+        #
+        #     perpindahan bingkai                              15
+        #     yang arah hadapnya berlawanan di kedua sisi       9
+        #     yang ruang pandangnya salah untuk orang baru      5
+        #
+        # Yang terlihat: bingkai melompat ke orang kedua, tapi ruang kosongnya
+        # tetap di sisi lama, sehingga wajahnya terdorong ke tepi yang justru ia
+        # hadapi. Selisihnya 0,20 lebar keluaran -- 216 piksel pada 1080.
+        #
+        # Jalur lama (tiga angka per titik, tanpa arah) tetap jalan: kalau
+        # arahnya tidak ada, dipakai nilai potongan seperti dulu.
+        if all(len(p) > 3 for p in jalur):
+            etx = _tangga(_langkah([(p[0], target_mendatar(p[3])) for p in jalur]))
+        else:
+            etx = f"{tx:.4f}"
         return (
-            f":'clip(({ex})*iw-{tx:.4f}*ow,0,iw-ow)'"
+            f":'clip(({ex})*iw-({etx})*ow,0,iw-ow)'"
             f":'clip(({ey})*ih-{ty:.4f}*oh,0,ih-oh)'"
         )
 
     if jalur:
         fokus_x, fokus_y = jalur[0][1], jalur[0][2]
+        # Arah dari jalurnya sendiri, bukan dari nilai potongan. Jalur satu titik
+        # muncul saat bingkainya memang diam, dan `lacak` hanya mengembalikan
+        # bentuk itu kalau ruang pandangnya juga tidak berpindah — jadi angka di
+        # jalur adalah yang paling tepat untuk seluruh potongan.
+        if len(jalur[0]) > 3:
+            tx = target_mendatar(jalur[0][3])
     if fokus_x is None and fokus_y is None:
         return ""
     fx = 0.5 if fokus_x is None else fokus_x

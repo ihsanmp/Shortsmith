@@ -35,6 +35,100 @@ from .ffmpeg import _fade_audio, _punya_audio
 log = logging.getLogger(__name__)
 
 
+# Berapa titik jalur yang boleh masuk ke satu ekspresi.
+#
+# BUKAN angka pilihan sendiri — ini batas parser ffmpeg. Tiap titik menambah
+# satu tingkat if() bersarang, dan penguraiannya memakai tumpukan berukuran
+# tetap. Diukur langsung dengan pembungkus crop yang sama persis dengan yang
+# dipakai di sini: 93 titik masih jalan, 94 gagal dengan
+#
+#     [Eval] Missing ')' or too many args in 'if(lt(t,...'
+#     ffmpeg keluar dengan kode 4294967274   (-22, EINVAL)
+#
+# Pada 5 titik/detik itu potongan 18,6 detik. Format overlay tidak pernah
+# menyentuhnya karena slotnya 1-4 detik, tapi format satu jalur memotong per
+# kalimat utuh — dan satu kalimat podcast bisa jauh lebih panjang dari itu.
+#
+# Dipatok 60, bukan 93. Sisanya ruang aman: pembungkusnya berbeda sedikit
+# antar renderer, dan build ffmpeg lain bisa punya tumpukan yang lebih kecil.
+# Ongkos ketelitiannya nyaris nol — lihat _pangkas.
+MAKS_TITIK = 60
+
+
+def _sederhanakan(titik: list[tuple[float, float]], eps: float) -> list[tuple[float, float]]:
+    """Ramer-Douglas-Peucker: buang titik yang bisa ditebak dari tetangganya.
+
+    Cocok justru karena ekspresi yang dibangun memang lurus antar titik. Titik
+    yang jatuh di garis antara tetangganya tidak membawa informasi apa pun —
+    membuangnya menghasilkan ekspresi yang secara harfiah sama bentuknya.
+
+    Yang TIDAK dibuang adalah titik tempat jalurnya berbelok, dan itulah bedanya
+    dengan mengambil tiap titik ke-N: penipisan merata akan memotong justru
+    lompatan tajam yang paling terlihat di hasil.
+    """
+    if len(titik) < 3:
+        return list(titik)
+
+    (t0, v0), (t1, v1) = titik[0], titik[-1]
+    span = t1 - t0
+    jauh, di = -1.0, 0
+    for i in range(1, len(titik) - 1):
+        t, v = titik[i]
+        # Simpangan diukur TEGAK (selisih nilai), bukan tegak lurus garis.
+        # Sumbunya beda satuan — detik lawan pecahan lebar frame — jadi jarak
+        # tegak lurus mencampur dua hal yang tidak sebanding. Yang terlihat di
+        # hasil adalah selisih posisi bingkai, dan itu yang diukur.
+        tebak = v0 if span <= 0 else v0 + (v1 - v0) * (t - t0) / span
+        d = abs(v - tebak)
+        if d > jauh:
+            jauh, di = d, i
+
+    if jauh <= eps:
+        return [titik[0], titik[-1]]
+    return _sederhanakan(titik[: di + 1], eps)[:-1] + _sederhanakan(titik[di:], eps)
+
+
+def _pangkas(titik: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Turunkan jumlah titik sampai muat di parser ffmpeg.
+
+    Ambangnya dinaikkan bertahap sampai muat, bukan dipatok sekali. Jalur yang
+    tenang lolos dengan ambang kecil dan nyaris tidak berubah; jalur yang
+    benar-benar ramai membayar lebih banyak — dan memang jalur seperti itu yang
+    tidak mungkin diwakili 60 titik tanpa kehilangan sesuatu.
+
+    Diukur pada jalur sungguhan dari job yang gagal (74 titik, 14,6 detik,
+    wajah melompat antara 0,20 dan 0,81 lebar frame)::
+
+        74 -> 24 titik
+        simpangan terbesar   0,0019 lebar frame  = 2,1 piksel pada 1080
+        simpangan rata-rata  0,0004 lebar frame
+
+    Dua piksel pada gambar yang bingkainya memang sedang bergerak: tidak ada
+    yang bisa melihatnya. Jalur gigi gergaji buatan yang berbelok di SETIAP
+    titik pun tetap muat, lewat penipisan merata di bawah.
+    """
+    if len(titik) <= MAKS_TITIK:
+        return titik
+
+    eps = 0.002
+    hasil = _sederhanakan(titik, eps)
+    while len(hasil) > MAKS_TITIK and eps < 0.5:
+        eps *= 1.5
+        hasil = _sederhanakan(titik, eps)
+
+    if len(hasil) > MAKS_TITIK:
+        # Jaring terakhir untuk jalur yang mustahil disederhanakan. Ujungnya
+        # dipertahankan supaya nilai tahan di awal dan akhir tetap benar.
+        langkah = len(hasil) / (MAKS_TITIK - 1)
+        pilih = {int(i * langkah) for i in range(MAKS_TITIK - 1)} | {len(hasil) - 1}
+        hasil = [p for i, p in enumerate(hasil) if i in pilih]
+
+    log.info(
+        "jalur wajah dipadatkan: %d -> %d titik (ambang %.4f)", len(titik), len(hasil), eps
+    )
+    return hasil
+
+
 def _tangga(titik: list[tuple[float, float]]) -> str:
     """Ekspresi ffmpeg untuk nilai yang berubah terhadap waktu, lurus antar titik.
 
@@ -44,9 +138,15 @@ def _tangga(titik: list[tuple[float, float]]) -> str:
 
     Menahan nilai di kedua ujung penting — tanpa itu, bingkai melompat di frame
     pertama dan terakhir slot, tepat di tempat potongan paling terlihat.
+
+    Jumlah titiknya dibatasi di sini, bukan di tempat jalurnya dibuat: yang
+    memaksakan batas itu adalah parser ffmpeg, dan modul inilah satu-satunya
+    yang tahu soal ffmpeg. Pemanggil boleh mengirim jalur sepanjang apa pun.
     """
     if len(titik) == 1:
         return f"{titik[0][1]:.4f}"
+
+    titik = _pangkas(titik)
 
     ekspresi = f"{titik[-1][1]:.4f}"
     for (t0, v0), (t1, v1) in reversed(list(zip(titik, titik[1:]))):

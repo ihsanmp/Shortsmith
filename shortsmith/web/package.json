@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsx scripts/cek-jsx.ts",
     "test": "tsx test/session.test.ts && tsx test/queue.test.ts",
     "db:verify": "tsx test/verify-db.ts",
     "storage:cors": "tsx scripts/setup-cors.ts",

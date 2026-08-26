@@ -189,6 +189,56 @@ def siapkan_musik(
     return Music(src=jalur, gain_db=gain_db, mulai=mulai)
 
 
+def zoom_menyamai_konsep(profile: ConceptProfile, sumber: str, crop: str = "") -> float:
+    """Zoom yang membuat wajah di hasil sebesar wajah di video contoh.
+
+    ## Kenapa ini menggantikan tebakan
+
+    Field `zoom` sebelumnya diisi model tanpa dasar pengukuran apa pun — tidak
+    ada di profile.py, tidak ada di gaya_visual.py. Padahal seberapa besar
+    kepala di layar adalah salah satu hal paling menentukan apakah hasilnya
+    terasa seperti konsepnya.
+
+    Terukur pada empat video contoh pengguna dan bahan yang ia pakai::
+
+        contoh 1  0,321    contoh 3  0,415
+        contoh 2  0,336    contoh 4  0,306
+        bahan podcast      0,200
+
+    Contohnya membingkai wajah sekitar sepertiga tinggi frame; bahannya jauh
+    lebih lebar. Tanpa penyesuaian, hasil yang katanya meniru konsep itu
+    membingkai wajah 40% lebih kecil.
+
+    ## Kenapa dibatasi
+
+    Zoom memperkecil jendela crop lalu memperbesarnya ke ukuran keluaran, jadi
+    tiap kenaikan membayar ketajaman. Batasnya ada di ZOOM_DARI_KERAPATAN_MAKS,
+    lengkap dengan angka perbesarannya.
+
+    Kembalikan 1.0 — tanpa zoom — kalau salah satu sisi tidak terukur. Menebak
+    di tempat yang tidak terukur persis kesalahan yang fungsi ini perbaiki.
+    """
+    from .decide import ZOOM_DARI_KERAPATAN_MAKS
+    from .gaya_visual import ukur_kerapatan
+
+    target = profile.kerapatan_wajah
+    if target <= 0:
+        return 1.0
+
+    punya = ukur_kerapatan(sumber)
+    if punya <= 0:
+        log.info("wajah tidak terbaca di bahan — zoom dibiarkan 1,0")
+        return 1.0
+
+    z = max(1.0, min(ZOOM_DARI_KERAPATAN_MAKS, target / punya))
+    log.info(
+        "kerapatan: konsep %.3f, bahan %.3f -> zoom %.2f%s",
+        target, punya, z,
+        " (dibatasi demi ketajaman)" if target / punya > ZOOM_DARI_KERAPATAN_MAKS else "",
+    )
+    return round(z, 3)
+
+
 def build_edl(
     plan: CutPlan,
     vmap: ProjectMap,
@@ -664,6 +714,22 @@ def run(
     sidik_subjek = memori_subjek.ingat(
         work, utama.media.path, utama.media.durasi, utama.media.crop
     )
+
+    # Zoom diturunkan dari PENGUKURAN, menimpa tebakan model.
+    #
+    # Yang diukur: seberapa besar kepala di layar pada video contoh, dibanding
+    # seberapa besar di bahan ini. Lihat `zoom_menyamai_konsep`. Potongan yang
+    # sudah dilepas punch-in-nya oleh validator (terlalu panjang) dibiarkan --
+    # di sana zoom memang tidak boleh ada, apa pun kerapatannya.
+    z_konsep = zoom_menyamai_konsep(profile, utama.media.path, utama.media.crop)
+    if z_konsep > 1.0:
+        diubah = 0
+        for c in plan.cuts:
+            if c.zoom > 1.0:
+                c.zoom = z_konsep
+                diubah += 1
+        if diubah:
+            log.info("zoom %d potongan disamakan ke kerapatan konsep", diubah)
 
     if pakai_overlay:
         from .overlay import build_overlay_edl

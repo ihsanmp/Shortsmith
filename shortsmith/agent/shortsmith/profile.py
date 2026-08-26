@@ -24,7 +24,7 @@ from .models import (
     rasio_terdekat,
 )
 from .format_video import deteksi_dari_file
-from .gaya_visual import ukur_gaya
+from .gaya_visual import ukur_gaya, ukur_kerapatan
 from .pelajari import pelajari_caption
 from .probe import probe
 
@@ -125,6 +125,7 @@ def extract_profile(
     format_terdeteksi: list[str] = []
     porsi: list[float] = []
     penggal: list[float] = []
+    kerapatan: list[float] = []
     caption_terbaca: CaptionStyle | None = None
 
     for path in sample_paths:
@@ -153,6 +154,14 @@ def extract_profile(
         gaya = ukur_gaya(path, shots)
         log.info("gaya visual %s: %s", Path(path).name, gaya.ringkas())
         porsi.append(gaya.porsi_berulang)
+
+        # Serapat apa contohnya membingkai orangnya. Nol (wajah tak terbaca)
+        # TIDAK ikut dirata-rata: ia berarti tidak tahu, bukan sangat lebar.
+        rapat = ukur_kerapatan(path)
+        if rapat > 0:
+            kerapatan.append(rapat)
+            log.info("kerapatan bingkai %s: tinggi wajah %.3f dari tinggi frame",
+                     Path(path).name, rapat)
 
         # Gaya caption dibaca dari contoh PERTAMA saja. Ia tidak berubah antar
         # video dalam satu konsep, dan membacanya berulang kali hanya menambah
@@ -207,6 +216,7 @@ def extract_profile(
         nama=nama,
         format=format_video,
         porsi_pembicara=round(porsi_pembicara, 3),
+        kerapatan_wajah=round(statistics.fmean(kerapatan), 3) if kerapatan else 0.0,
         metrik={
             "durasi_total": _stat(durasi_total),
             "avg_shot_length": _stat(avg_shot),

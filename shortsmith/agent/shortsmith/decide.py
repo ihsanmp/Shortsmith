@@ -273,6 +273,20 @@ def _build_prompt(
 # Di atas panjang ini, punch-in dilepas. Lihat alasannya di `_validate`.
 ZOOM_MAKS_DETIK = 15.0
 
+# Batas atas zoom yang diturunkan dari pengukuran kerapatan.
+#
+# Bukan selera: zoom memperkecil jendela crop lalu memperbesarnya ke ukuran
+# keluaran, jadi tiap kenaikan membayar ketajaman. Untuk crop 9:16 dari sumber
+# 1920x1080::
+#
+#     zoom 1,00   crop 608x1080   perbesaran 1,78x
+#     zoom 1,40   crop 434x771    perbesaran 2,49x
+#     zoom 1,60   crop 380x675    perbesaran 2,84x
+#
+# Dipatok 1,4: di atas itu gambarnya mulai terlihat lunak pada layar penuh,
+# dan kemiripan dengan konsep tidak sepadan dengan ketajaman yang hilang.
+ZOOM_DARI_KERAPATAN_MAKS = 1.4
+
 
 def _validate(cuts: list[PlannedCut], vmap: ProjectMap, profile: ConceptProfile) -> list[str]:
     """Clamp in-place ke durasi video sumbernya, lalu kembalikan sisa masalah."""

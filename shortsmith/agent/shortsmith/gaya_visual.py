@@ -35,6 +35,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 from .config import SETTINGS
@@ -91,6 +92,79 @@ def _ambil_frame(path: str | Path, detik: float) -> np.ndarray | None:
     if hasil.returncode != 0 or len(hasil.stdout) < 72:
         return None
     return np.frombuffer(hasil.stdout[:72], dtype=np.uint8).reshape(8, 9)
+
+
+# Berapa frame yang dicicip untuk mengukur kerapatan bingkai. Enam belas cukup
+# untuk median yang stabil pada contoh 30-60 detik, dan murah: satu deteksi
+# wajah per frame.
+CICIP_KERAPATAN = 16
+
+
+def ukur_kerapatan(path: str | Path) -> float:
+    """Tinggi wajah sebagai pecahan tinggi frame — seberapa RAPAT pembingkaiannya.
+
+    ## Kenapa ini perlu diukur
+
+    Ini satu-satunya besaran gaya yang menentukan seberapa dekat penonton merasa
+    berada, dan sebelumnya tidak diukur sama sekali. Yang mengisi kekosongan itu
+    adalah tebakan model lewat field `zoom` -- angka yang tidak berasal dari
+    pengukuran mana pun.
+
+    Terukur pada empat video contoh yang dikirim pengguna, dibandingkan dengan
+    bahan yang dipakainya::
+
+        contoh 1    0,321      contoh 3    0,415
+        contoh 2    0,336      contoh 4    0,306
+        bahan podcast          0,200
+
+    Contohnya membingkai wajah sekitar sepertiga tinggi frame; bahannya jauh
+    lebih lebar. Tanpa penyesuaian, hasilnya membingkai wajah 40% lebih kecil
+    daripada konsep yang katanya ditiru.
+
+    Dipakai TINGGI kotak wajah, bukan luasnya: yang menentukan rasa dekat adalah
+    seberapa besar kepala di layar secara tegak, dan luas mencampurnya dengan
+    lebar kotak yang berubah saat wajah menyamping.
+
+    Kembalikan 0.0 kalau wajah tidak pernah terbaca — itu bukan kegagalan, cuma
+    berarti konsepnya memang bukan tentang orang.
+    """
+    from .wajah import LEBAR_DETEKSI, _ambil_detektor, tersedia
+
+    if not tersedia():
+        return 0.0
+
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        return 0.0
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        durasi = (cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0) / fps if fps else 0.0
+        if durasi <= 0:
+            return 0.0
+
+        nilai: list[float] = []
+        for i in range(CICIP_KERAPATAN):
+            cap.set(cv2.CAP_PROP_POS_MSEC, durasi * (i + 1) / (CICIP_KERAPATAN + 1) * 1000)
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                continue
+            skala = LEBAR_DETEKSI / frame.shape[1] if frame.shape[1] > LEBAR_DETEKSI else 1.0
+            kecil = cv2.resize(frame, None, fx=skala, fy=skala) if skala != 1.0 else frame
+            det = _ambil_detektor(kecil.shape[1], kecil.shape[0])
+            if det is None:
+                return 0.0
+            _, wajah = det.detect(kecil)
+            if wajah is None or len(wajah) == 0:
+                continue
+            # Wajah TERBESAR: yang lain latar belakang, dan bukan itu yang
+            # menentukan rasa dekatnya.
+            nilai.append(max(float(b[3]) for b in wajah) / kecil.shape[0])
+    finally:
+        cap.release()
+
+    if not nilai:
+        return 0.0
+    return round(float(np.median(nilai)), 3)
 
 
 def ukur_gaya(path: str | Path, panjang_shot: list[float]) -> GayaVisual:

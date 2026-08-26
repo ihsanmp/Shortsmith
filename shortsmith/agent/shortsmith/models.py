@@ -92,6 +92,14 @@ class ConceptProfile(BaseModel):
     # 0.57, dan keduanya benar untuk gayanya masing-masing.
     porsi_pembicara: float = 0.0
 
+    # Tinggi wajah sebagai pecahan tinggi frame di video contoh — seberapa
+    # RAPAT konsep ini membingkai orangnya. DIUKUR, lihat gaya_visual.py.
+    #
+    # Nol berarti wajah tidak pernah terbaca di contohnya, dan itu jawaban yang
+    # sah: konsepnya memang bukan tentang orang. Pemakainya harus memperlakukan
+    # nol sebagai "tidak tahu", bukan sebagai "sangat lebar".
+    kerapatan_wajah: float = 0.0
+
     aspect_ratio: str = "auto"
     caption: CaptionStyle = Field(default_factory=CaptionStyle)
     struktur: list[Role] = Field(default_factory=lambda: [Role.hook, Role.isi, Role.cta])

@@ -7,6 +7,31 @@ import { sql, type SQL } from "drizzle-orm";
  */
 
 export const MAX_RETRY = 2;
+
+/**
+ * Berapa kali job boleh direbut kembali karena agent-nya hilang.
+ *
+ * TERPISAH dari MAX_RETRY, dan sengaja jauh lebih longgar. Keduanya menjawab
+ * pertanyaan yang berbeda:
+ *
+ *   retry_count  "apakah job ini rusak?"      — bukti: agent melaporkan gagal
+ *   lepas_count  "apakah agent ini sehat?"    — bukti: denyutnya berhenti
+ *
+ * Agent yang hilang bukan bukti apa pun tentang job-nya. PC-nya tidur, listrik
+ * padam, atau daemonnya di-restart untuk memasang versi baru — dan restart
+ * adalah hal yang sering terjadi justru saat sedang memperbaiki sesuatu.
+ *
+ * Terjadi sungguhan: satu job podcast sedang menunggu pengguna mencentang
+ * topik, keadaan yang paling lama dan paling rentan karena ia duduk di
+ * `processing` tanpa menghitung apa pun. Daemon di-restart untuk memasang
+ * perbaikan, server membacanya sebagai percobaan gagal ketiga, dan job itu
+ * ditandai gagal permanen padahal tidak ada yang salah dengannya.
+ *
+ * Tetap dibatasi: job yang benar-benar membuat agent-nya mati tiap kali harus
+ * berhenti sendiri, bukan mengulang analisis satu jam berkali-kali selamanya.
+ * Sepuluh cukup longgar untuk tidak pernah tersentuh pemakaian normal.
+ */
+export const MAX_LEPAS = 10;
 export const HEARTBEAT_TIMEOUT = "5 minutes";
 
 /**
@@ -71,15 +96,17 @@ export function touchHeartbeatSql(
 export function reapStaleJobsSql(): SQL {
   return sql`
     UPDATE jobs
-       SET status = CASE WHEN retry_count >= ${MAX_RETRY} THEN 'failed'::job_status
+       SET status = CASE WHEN lepas_count >= ${MAX_LEPAS} THEN 'failed'::job_status
                          ELSE 'pending'::job_status END,
-           retry_count = retry_count + 1,
+           -- lepas_count, BUKAN retry_count. Lihat MAX_LEPAS untuk kenapa
+           -- keduanya menjawab pertanyaan yang berbeda.
+           lepas_count = lepas_count + 1,
            heartbeat_at = NULL,
            error_message = CASE
-             WHEN retry_count >= ${MAX_RETRY}
-             THEN 'Agent berhenti merespons dan batas percobaan ulang habis.'
+             WHEN lepas_count >= ${MAX_LEPAS}
+             THEN 'Agent berkali-kali berhenti merespons di tengah job ini.'
              ELSE error_message END,
-           finished_at = CASE WHEN retry_count >= ${MAX_RETRY} THEN now() ELSE NULL END
+           finished_at = CASE WHEN lepas_count >= ${MAX_LEPAS} THEN now() ELSE NULL END
      WHERE status = 'processing'
        AND heartbeat_at IS NOT NULL
        AND heartbeat_at < now() - ${HEARTBEAT_TIMEOUT}::interval

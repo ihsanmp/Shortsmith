@@ -51,14 +51,28 @@ async function main() {
   } else {
     const [row] = await sql`
       UPDATE jobs
-         SET status = 'pending', retry_count = 0, error_message = NULL,
+         SET status = 'pending', retry_count = 0, lepas_count = 0,
+             error_message = NULL,
              heartbeat_at = NULL, progress = 0, tahap = '',
              started_at = NULL, finished_at = NULL
-       WHERE id = ${id} AND status = 'failed'
+       WHERE id = ${id}
+         AND (
+           status = 'failed'
+           -- Job yang tertinggal 'processing' tanpa agent juga boleh diantre
+           -- ulang, TAPI hanya kalau denyutnya sudah lama diam. Tanpa syarat
+           -- itu, satu perintah ini bisa merebut job yang sedang dirender dan
+           -- membuat dua proses mengerjakan berkas yang sama.
+           OR (status = 'processing'
+               AND (heartbeat_at IS NULL
+                    OR heartbeat_at < now() - interval '2 minutes'))
+         )
       RETURNING id, status, retry_count
     `;
     if (!row) {
-      console.error(`[X] job ${id} tidak ada, atau statusnya bukan 'failed'`);
+      console.error(
+        `[X] job ${id} tidak ada, statusnya bukan 'failed', ` +
+          `atau agent-nya masih berdenyut (job sedang dikerjakan)`,
+      );
       process.exit(1);
     }
     console.log(`[OK] ${row.id} -> ${row.status} (retry ${row.retry_count})`);

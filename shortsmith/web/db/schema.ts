@@ -269,6 +269,16 @@ export const jobs = pgTable(
     tahap: text("tahap").notNull().default(""),
     errorMessage: text("error_message"),
     retryCount: integer("retry_count").notNull().default(0),
+
+    // Berapa kali job ini direbut kembali karena agent-nya berhenti berdenyut.
+    //
+    // TERPISAH dari retryCount, dan itu bukan kerapian: keduanya menjawab
+    // pertanyaan yang berbeda. retryCount menjawab "apakah job ini rusak?",
+    // dengan bukti berupa laporan gagal dari agent. lepasCount menjawab
+    // "apakah agent-nya sehat?", dan agent yang hilang tidak mengatakan apa pun
+    // tentang job-nya. Lihat MAX_LEPAS di lib/queue-sql.ts.
+    lepasCount: integer("lepas_count").notNull().default(0),
+
     heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),

@@ -15,6 +15,7 @@ import {
   finishJobSql,
   queuePositionSql,
   reapStaleJobsSql,
+  MAX_LEPAS,
   touchHeartbeatSql,
 } from "../lib/queue-sql";
 
@@ -51,6 +52,7 @@ CREATE TABLE jobs (
   tahap         text       NOT NULL DEFAULT '',
   error_message text,
   retry_count   integer    NOT NULL DEFAULT 0,
+  lepas_count   integer    NOT NULL DEFAULT 0,
   heartbeat_at  timestamptz,
   started_at    timestamptz,
   finished_at   timestamptz,
@@ -136,10 +138,19 @@ async function main() {
   cek("dikembalikan ke pending, bukan failed", dipungut?.status === "pending",
       String(dipungut?.status));
 
-  const s4 = await q<{ retry_count: number; heartbeat_at: string | null }>(
-    sql`SELECT retry_count, heartbeat_at FROM jobs WHERE id = ${terlantar}`,
+  const s4 = await q<{
+    retry_count: number;
+    lepas_count: number;
+    heartbeat_at: string | null;
+  }>(
+    sql`SELECT retry_count, lepas_count, heartbeat_at FROM jobs WHERE id = ${terlantar}`,
   );
-  cek("retry_count naik jadi 1", Number(s4[0].retry_count) === 1, String(s4[0].retry_count));
+  cek("lepas_count naik jadi 1", Number(s4[0].lepas_count) === 1, String(s4[0].lepas_count));
+  // Inti perubahannya: agent yang hilang TIDAK menghabiskan jatah percobaan
+  // job. Restart daemon untuk memasang versi baru pernah membuat satu job
+  // ditandai gagal permanen padahal tidak ada yang salah dengannya.
+  cek("retry_count TIDAK ikut naik", Number(s4[0].retry_count) === 0,
+      String(s4[0].retry_count));
   cek("heartbeat dibersihkan", s4[0].heartbeat_at === null);
 
   const segar = await buat({ status: "processing" });
@@ -147,15 +158,19 @@ async function main() {
   const r2 = await q<{ id: string }>(reapStaleJobsSql());
   cek("job dengan heartbeat segar TIDAK dipungut", !r2.some((r) => r.id === segar));
 
-  // ---- 5. reaper menyerah setelah batas retry ----
-  console.log("\n5. reaper menandai gagal permanen setelah batas percobaan");
-  const habis = await buat({ status: "processing", retry: 2 });
-  await q(sql`UPDATE jobs SET heartbeat_at = now() - interval '9 minutes'
+  // ---- 5. reaper menyerah setelah agent hilang berkali-kali ----
+  console.log("\n5. reaper menandai gagal setelah agent hilang berkali-kali");
+  // Batasnya lepas_count, bukan retry_count: job yang benar-benar membuat
+  // agent-nya mati tiap kali harus berhenti sendiri, tapi jauh lebih longgar
+  // daripada batas kegagalan sungguhan.
+  const habis = await buat({ status: "processing" });
+  await q(sql`UPDATE jobs SET heartbeat_at = now() - interval '9 minutes',
+                              lepas_count = ${MAX_LEPAS}
               WHERE id = ${habis}`);
 
   const r3 = await q<{ id: string; status: string }>(reapStaleJobsSql());
   const mati = r3.find((r) => r.id === habis);
-  cek("retry habis -> failed", mati?.status === "failed", String(mati?.status));
+  cek("batas lepas habis -> failed", mati?.status === "failed", String(mati?.status));
 
   const s5 = await q<{ error_message: string | null; finished_at: string | null }>(
     sql`SELECT error_message, finished_at FROM jobs WHERE id = ${habis}`,

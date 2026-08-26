@@ -361,10 +361,40 @@ def fokus_adegan(
 # tanpa mengubah jalur yang dihasilkan.
 FPS_LACAK = 5
 
-# Panjang jendela rata-rata bergerak untuk menghaluskan jalur, dalam sampel.
-# Deteksi wajah bergetar satu-dua piksel antar frame; tanpa penghalusan,
-# getaran itu jadi guncangan kamera yang terlihat jelas di hasil.
-HALUS = 5
+# Panjang jendela rata-rata bergerak untuk menghaluskan jalur, dalam sampel,
+# dan berapa kali jendela itu dilewatkan.
+#
+# Deteksi wajah bergetar satu-dua piksel antar frame; tanpa penghalusan, getaran
+# itu jadi guncangan kamera yang terlihat jelas di hasil.
+#
+# ## Kenapa DUA lintasan, bukan satu jendela lebar
+#
+# Satu rata-rata bergerak menghasilkan jalur yang patah di tiap sampel: renderer
+# menarik garis lurus antar titik, jadi kecepatan bingkai berubah mendadak lima
+# kali per detik. Itu yang terbaca sebagai gerak kamera yang tersendat, bukan
+# amplitudo getarannya.
+#
+# Melewatkan jendela dua kali menghasilkan kernel segitiga, yang responsnya
+# tidak punya sudut — dan itu jauh lebih menentukan daripada sekadar melebarkan
+# jendelanya sekali.
+#
+# Diukur pada 9 potongan job nyata, percepatan bingkai di dalam bagian yang
+# menerus (perpindahan tegas dikeluarkan, karena percepatannya memang tak
+# terhingga dan menenggelamkan seluruh perbandingan)::
+#
+#     filter                percepatan rms   simpangan maks   gerak tersisa
+#     med5 + rata5 (lama)         0,00087        16 px            48%
+#     med5 + rata7 x2             0,00031        20 px            36%
+#     med5 + rata9 x2             0,00024        22 px            30%
+#     med5 + rata11 x2            0,00016        23 px            25%
+#
+# Dipilih rata9 dua kali: percepatan turun 72%, sementara simpangan bingkai
+# terhadap wajah cuma naik dari 16 ke 22 piksel pada 1080 — 2% lebar bingkai,
+# tidak terlihat. Melebar lagi ke 11 memberi sedikit tambahan tapi gerak yang
+# tersisa mulai tergerus, dan kehalusan yang didapat dengan membekukan bingkai
+# bukan kehalusan.
+HALUS = 9
+LINTASAN_HALUS = 2
 
 # Panjang jendela median untuk membuang pencilan, dalam sampel.
 #
@@ -751,16 +781,19 @@ def _tapis(nilai: list[float]) -> list[float]:
         median lalu rata2   0,011   (1%, tidak terlihat)
 
     Rata-ratanya tetap dipakai SETELAH median, karena median saja meninggalkan
-    tangga-tangga kecil di antara nilai yang berdekatan.
+    tangga-tangga kecil di antara nilai yang berdekatan — dan dilewatkan
+    beberapa kali, lihat LINTASAN_HALUS.
     """
     n = len(nilai)
     if n < 3:
         return list(nilai)
     r = JENDELA_MEDIAN // 2
-    tengah = [
+    hasil = [
         float(np.median(nilai[max(0, i - r) : min(n, i + r + 1)])) for i in range(n)
     ]
-    return _haluskan(tengah)
+    for _ in range(LINTASAN_HALUS):
+        hasil = _haluskan(hasil)
+    return hasil
 
 
 def _haluskan(nilai: list[float]) -> list[float]:

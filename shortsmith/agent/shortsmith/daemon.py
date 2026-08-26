@@ -201,19 +201,39 @@ class Daemon:
                     sidik_folder = sidik_baru
                     terakhir_lapor = time.time()
 
-            if not job:
-                # Antrean render kosong — pakai giliran ini untuk tugas singkat.
-                #
-                # Sengaja SETELAH job, bukan sebelum: render adalah pekerjaan
-                # yang benar-benar diminta pengguna, sedangkan tugas di sini
-                # membantu ia menyiapkannya. Menulis prompt sambil membiarkan
-                # render menunggu adalah urutan yang terbalik.
-                if self._ambil_tugas():
+            # Apa pun yang terjadi di dalam satu putaran TIDAK boleh menghentikan
+            # daemon.
+            #
+            # Sebelum ini hanya pemanggilan API yang dijaga; sisanya telanjang.
+            # Terjadi sungguhan: satu muatan yang tidak punya field `id` melempar
+            # KeyError, ia lolos sampai ke batas CLI, dan daemon MATI — tercatat
+            # sebagai satu baris "ERROR KeyError: 'id'" tanpa jejak apa pun, lalu
+            # antrean berhenti dilayani sampai ada yang menyalakannya lagi.
+            #
+            # Satu item yang rusak adalah satu item yang rusak. Ia dicatat lengkap
+            # dengan jejaknya, dilewati, dan putaran berikutnya jalan seperti biasa.
+            try:
+                if not job:
+                    # Antrean render kosong — pakai giliran ini untuk tugas singkat.
+                    #
+                    # Sengaja SETELAH job, bukan sebelum: render adalah pekerjaan
+                    # yang benar-benar diminta pengguna, sedangkan tugas di sini
+                    # membantu ia menyiapkannya. Menulis prompt sambil membiarkan
+                    # render menunggu adalah urutan yang terbalik.
+                    if self._ambil_tugas():
+                        continue
+                    self.berhenti.wait(POLL_KOSONG)
                     continue
-                self.berhenti.wait(POLL_KOSONG)
-                continue
 
-            self._kerjakan(job)
+                self._kerjakan(job)
+            except JobDibatalkan:
+                # Sudah dicatat di tempatnya, dan bukan kesalahan: job diambil
+                # alih pihak lain.
+                continue
+            except Exception:  # noqa: BLE001
+                log.exception("satu putaran gagal — daemon diteruskan")
+                self.berhenti.wait(POLL_ERROR)
+                continue
 
         log.info("daemon berhenti.")
 
@@ -233,7 +253,13 @@ class Daemon:
         if not t:
             return False
 
-        tugas_id, tipe = t["id"], t["tipe"]
+        # Diperiksa, bukan langsung diindeks. Muatan tanpa `id` pernah membuat
+        # daemon mati dengan pesan "KeyError: 'id'" yang tidak menyebut satu pun
+        # petunjuk tentang isinya.
+        tugas_id, tipe = t.get("id"), t.get("tipe")
+        if not tugas_id or not tipe:
+            log.warning("muatan tugas tidak lengkap, dilewati: %s", str(t)[:300])
+            return False
         log.info("=== tugas %s (%s) ===", tugas_id, tipe)
         try:
             if tipe == "prompt":
@@ -322,8 +348,11 @@ class Daemon:
         }
 
     def _kerjakan(self, job: dict[str, Any]) -> None:
-        job_id = job["id"]
-        tipe = job["tipe"]
+        job_id = job.get("id")
+        tipe = job.get("tipe")
+        if not job_id or not tipe:
+            log.warning("muatan job tidak lengkap, dilewati: %s", str(job)[:300])
+            return
         log.info("=== job %s (%s) ===", job_id, tipe)
         mulai = time.time()
 

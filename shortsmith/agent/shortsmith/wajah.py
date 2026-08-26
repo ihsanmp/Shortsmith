@@ -450,6 +450,29 @@ AMBANG_LONCAT = 0.10
 # loncatannya benar-benar terjadi — lihat `_runut`.
 TAHAN_PINDAH = 5
 
+# Berapa sampel yang dituntut untuk perpindahan yang datang TEPAT SETELAH
+# perpindahan lain. Pada 5 sampel/detik, dua detik penuh.
+#
+# Sesaat setelah bingkai berpindah, penjejak sedang paling tidak yakin: shot-nya
+# baru berganti, wajah yang tadi dipegang baru saja hilang, dan wajah baru belum
+# terbukti bertahan. Membolehkan perpindahan kedua secepat yang pertama
+# menghasilkan bingkai yang MEMANTUL.
+#
+# Terjadi sungguhan dan terlihat. Pada satu potongan 27 detik::
+#
+#     t= 5,61  pergantian shot   (beda gambar 60,7)
+#     t=13,41  pergantian shot   (beda gambar 60,8)
+#     t=14,61  gambar TIDAK berubah (beda 1,3) -- bingkai memantul balik
+#     t=26,83  pergantian shot   (beda gambar 69,5)
+#
+# Yang di 14,61 datang 1,2 detik setelah yang di 13,41, di dalam shot yang sama.
+# Dengan dua detik, ia gugur; ketiga pergantian shot yang sungguhan tetap lolos.
+#
+# Menuntut lebih lama TIDAK membuat bingkai tertinggal: sampel masa tunggu
+# ditulis ulang secara surut, jadi perpindahan yang akhirnya disahkan tetap
+# jatuh di tempat ia benar-benar terjadi.
+TAHAN_SETELAH_PINDAH = 10
+
 # Kalau seluruh pergerakan wajah lebih kecil dari ini (pecahan lebar gambar),
 # bingkainya DIAM.
 #
@@ -632,6 +655,9 @@ def _runut(
     calon: tuple[float, float, float] | None = None
     hitung = 0
     pindah = 0
+    # Sampel ke berapa bingkai terakhir berpindah. Dipakai menuntut masa tenang
+    # sesudahnya -- lihat TAHAN_SETELAH_PINDAH.
+    pindah_di = -10**9
 
     for nomor, (t, kandidat) in enumerate(mentah):
         if pegang is None:
@@ -684,10 +710,14 @@ def _runut(
                 if sd is not None and orang_sama(sd, rujukan):
                     cocok = k
                     break
-            if cocok is not None:
+            # Masa tenang berlaku di sini juga. Memori membuat penjejak yakin
+            # SIAPA yang muncul, bukan yakin bahwa memindahkan bingkai sekarang
+            # adalah keputusan yang enak dilihat.
+            if cocok is not None and nomor - pindah_di >= TAHAN_SETELAH_PINDAH:
                 pegang = (cocok[0], cocok[1], cocok[3])
                 calon, hitung = None, 0
                 pindah += 1
+                pindah_di = nomor
                 hasil.append((t, *pegang))
                 continue
 
@@ -700,15 +730,21 @@ def _runut(
         else:
             calon, hitung = baru, 1
 
-        if hitung >= TAHAN_PINDAH:
+        perlu = (
+            TAHAN_SETELAH_PINDAH
+            if nomor - pindah_di < TAHAN_SETELAH_PINDAH
+            else TAHAN_PINDAH
+        )
+        if hitung >= perlu:
             # Perpindahan disahkan. Sampel selama masa tunggu ditulis ulang ke
             # posisi BARU, bukan dibiarkan di posisi lama: kalau tidak, akan ada
             # satu detik di mana bingkai memandangi orang yang sudah pergi.
-            for i in range(len(hasil) - hitung + 1, len(hasil)):
+            for i in range(max(0, len(hasil) - hitung + 1), len(hasil)):
                 hasil[i] = (hasil[i][0], *calon)
             pegang = calon
             calon, hitung = None, 0
             pindah += 1
+            pindah_di = nomor
             hasil.append((t, *pegang))
         else:
             # Masih menunggu. Bingkainya TIDAK bergerak sedikit pun.

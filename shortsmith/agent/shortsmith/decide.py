@@ -270,6 +270,10 @@ def _build_prompt(
     return "\n".join(bagian)
 
 
+# Di atas panjang ini, punch-in dilepas. Lihat alasannya di `_validate`.
+ZOOM_MAKS_DETIK = 15.0
+
+
 def _validate(cuts: list[PlannedCut], vmap: ProjectMap, profile: ConceptProfile) -> list[str]:
     """Clamp in-place ke durasi video sumbernya, lalu kembalikan sisa masalah."""
     masalah: list[str] = []
@@ -280,7 +284,31 @@ def _validate(cuts: list[PlannedCut], vmap: ProjectMap, profile: ConceptProfile)
     # sampai tak pernah menyala. Tambah 20 klip B-roll dan penjaganya mati.
     durasi_sumber = vmap.videos[0].media.durasi
 
+    dilepas = 0
     for i, cut in enumerate(cuts):
+        # Punch-in yang tidak pernah dilepas bukan punch-in.
+        #
+        # Zoom gunanya menekankan sesuatu, dan penekanan hanya terbaca relatif
+        # terhadap sekitarnya. Ditahan selama setengah menit, ia berhenti jadi
+        # penekanan dan cuma jadi bingkai yang lebih rapat — dengan ongkos yang
+        # terukur::
+        #
+        #     zoom 1,00   crop 608x1080   piksel sumber 100%   perbesaran 1,78x
+        #     zoom 1,10   crop 552x982    piksel sumber  83%   perbesaran 1,96x
+        #     zoom 1,15   crop 528x939    piksel sumber  76%   perbesaran 2,04x
+        #
+        # Jadi seperempat video jadi lebih lunak tanpa imbalan apa pun. Dan
+        # karena bingkainya lebih rapat, gerak pelacakan yang sama ikut membesar
+        # di keluaran.
+        #
+        # Batasnya datang dari laporan pengguna, bukan dari angka yang dikarang:
+        # pada satu hasil ia mempertanyakan potongan 27 detik berzoom 1,10, dan
+        # TIDAK mempertanyakan potongan 12,9 detik berzoom 1,15 di video yang
+        # sama. Lima belas detik duduk di antara keduanya.
+        if cut.zoom > 1.0 and cut.durasi > ZOOM_MAKS_DETIK:
+            cut.zoom = 1.0
+            dilepas += 1
+
         # Audio hanya boleh dari satu video: VIDEO 0. Ini bukan preferensi gaya
         # melainkan bentuk formatnya — satu suara, satu topik, satu alur.
         if cut.sumber != 0:
@@ -338,6 +366,12 @@ def _validate(cuts: list[PlannedCut], vmap: ProjectMap, profile: ConceptProfile)
 
     if not any(c.role.value == "hook" for c in cuts):
         masalah.append("Tidak ada potongan dengan role 'hook'.")
+
+    if dilepas:
+        log.info(
+            "punch-in dilepas dari %d potongan yang lebih panjang dari %.0f detik",
+            dilepas, ZOOM_MAKS_DETIK,
+        )
 
     return masalah
 

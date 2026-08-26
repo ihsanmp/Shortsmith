@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import { PanelFlow } from "@/components/panel-flow";
 import { uploadFile } from "@/lib/upload";
@@ -11,7 +12,6 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { galatDari } from "@/lib/galat";
 
 type Concept = { id: string; nama: string; siap: boolean; isDefault: boolean };
-type Sumber = "pustaka" | "unggah";
 type JenisVideo = "short" | "cinematic" | "podcast";
 
 /** Nama yang ditampilkan per jenis, plus apakah lagunya wajib. */
@@ -87,28 +87,14 @@ type FolderBahan = {
   updatedAt: string | null;
 };
 
-/** Harus sama dengan RASIO di agent/shortsmith/models.py */
-const RASIO = [
-  { v: "auto", t: "Ikuti video contoh (disarankan)" },
-  { v: "9:16", t: "9:16 — TikTok, Reels, Shorts (1080×1920)" },
-  { v: "4:5", t: "4:5 — feed Instagram potret (1080×1350)" },
-  { v: "3:4", t: "3:4 — potret lebar (1080×1440)" },
-  { v: "1:1", t: "1:1 — persegi (1080×1080)" },
-  { v: "16:9", t: "16:9 — lanskap (1920×1080)" },
-];
 
-const MAKS_CONTOH = 4;
 const MAKS_MENTAH = 10;
 
 
 export default function NewProjectPage() {
   const [concepts, setConcepts] = useState<Concept[]>([]);
-  const [sumber, setSumber] = useState<Sumber>("pustaka");
   const [conceptId, setConceptId] = useState("");
-  const [namaKonsep, setNamaKonsep] = useState("");
   const [brief, setBrief] = useState("");
-  const [contoh, setContoh] = useState<File[]>([]);
-  const [rasio, setRasio] = useState("auto");
 
 
   // Sengaja DUA kolom terpisah, bukan satu kolom multi-file. Browser
@@ -193,7 +179,6 @@ export default function NewProjectPage() {
         const siap = (d.concepts ?? []).filter((c) => c.siap);
         setConcepts(siap);
         setConceptId(siap.find((c) => c.isDefault)?.id ?? siap[0]?.id ?? "");
-        if (siap.length === 0) setSumber("unggah");
       })
       .catch((err: Error) => setKonsepGagal(err.message || "Gagal memuat daftar konsep."))
       .finally(() => setKonsepDimuat(true));
@@ -303,10 +288,10 @@ export default function NewProjectPage() {
   const totalMB = daftarBahan.reduce((a, f) => a + f.ukuran, 0) / 1e6;
   const adaTerlaluBesar = daftarBahan.some((f) => f.ukuran > 5e9);
 
-  const konsepValid =
-    sumber === "pustaka"
-      ? Boolean(conceptId)
-      : contoh.length >= 1 && contoh.length <= MAKS_CONTOH && namaKonsep.trim().length > 0;
+  // Satu jalur saja: konsep harus sudah ada. Membuatnya sambil lalu di form
+  // ini menghasilkan konsep yang diukur dari video contoh yang kebetulan
+  // tersedia, dan seluruh gaya hasilnya bergantung pada pengukuran itu.
+  const konsepValid = Boolean(conceptId);
 
   // Lagu selalu opsional sekarang. Dibiarkan sebagai konstanta bernama, bukan
   // dihapus dari kondisi tombol, supaya tempat yang harus diubah tetap satu
@@ -320,16 +305,6 @@ export default function NewProjectPage() {
     setBusy(true);
     setError("");
     try {
-      // Video contoh diunggah lebih dulu supaya kalau gagal, tidak ada
-      // project setengah jadi yang tertinggal.
-      const sampleKeys: string[] = [];
-      if (sumber === "unggah") {
-        for (const [i, f] of contoh.entries()) {
-          setTahap(`Mengunggah video contoh ${i + 1} dari ${contoh.length}`);
-          setProgress(0);
-          sampleKeys.push((await uploadFile(f, "sample", setProgress)).key);
-        }
-      }
 
       // Diunggah berurutan dan didaftarkan berurutan: rawKeys[0] harus tetap
       // sumber suara sesampainya di agent.
@@ -421,9 +396,7 @@ export default function NewProjectPage() {
           rasio: rasioOut,
           musik,
           rawKeys,
-          ...(sumber === "pustaka"
-            ? { conceptId }
-            : { konsepBaru: { nama: namaKonsep.trim(), sampleKeys, aspectRatio: rasio } }),
+          conceptId,
         }),
       });
 
@@ -446,343 +419,12 @@ export default function NewProjectPage() {
       <form onSubmit={submit} className="panel stack">
         <div>
           <label>Asal bahan mentah</label>
-          <div className="pilihan-grup">
-<label className="pilihan pilihan-radio">
-              <input
-                type="radio"
-                name="asal"
-                checked={asal === "lokal"}
-                disabled={busy}
-                onChange={() => setAsal("lokal")}
-              />
-              <span className="pilihan-tanda" aria-hidden>
-                <span className="pilihan-cincin" />
-                <span className="pilihan-titik" />
-              </span>
-              <span className="pilihan-teks">
-                <span className="pilihan-judul">Ambil dari folder PC</span>
-              </span>
-            </label>
-<label className="pilihan pilihan-radio">
-              <input
-                type="radio"
-                name="asal"
-                checked={asal === "unggah"}
-                disabled={busy}
-                onChange={() => setAsal("unggah")}
-              />
-              <span className="pilihan-tanda" aria-hidden>
-                <span className="pilihan-cincin" />
-                <span className="pilihan-titik" />
-              </span>
-              <span className="pilihan-teks">
-                <span className="pilihan-judul">Unggah ke storage</span>
-              </span>
-            </label>
-          </div>
-
-          {asal === "lokal" ? (
-            folderInfo?.root ? (
-              <>
-                <div
-                  className="row"
-                  style={{ justifyContent: "space-between", marginBottom: 14, gap: 12 }}
-                >
-                  <p className="hint mono" style={{ margin: 0 }}>
-                    {folderInfo.root}
-                  </p>
-                  {/* Daftar ini datang dari agent, jadi ia bisa tertinggal dari
-                      isi disk yang sebenarnya. Waktunya ditampilkan supaya
-                      "berkas belum muncul" bisa dibedakan dari "daftarnya basi",
-                      dan tombolnya memberi jalan keluar tanpa memuat ulang. */}
-                  <span className="row" style={{ gap: 8, flexShrink: 0 }}>
-                    {folderInfo.updatedAt && (
-                      <span className="hint">
-                        diperbarui{" "}
-                        {new Date(folderInfo.updatedAt).toLocaleTimeString("id-ID", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      disabled={busy}
-                      onClick={() => muatFolder()}
-                    >
-                      Segarkan
-                    </button>
-                  </span>
-                </div>
-
-                <label htmlFor="pilih-suara">Rekaman suara (satu file)</label>
-                <Dropdown
-                  id="pilih-suara"
-                  nilai={pilihSuara ? kunci(pilihSuara) : ""}
-                  placeholder="— pilih berkas —"
-                  disabled={busy || kelompokSuara.length === 0}
-                  opsi={kelompokSuara.flatMap((g) =>
-                    g.berkas.map((b) => ({
-                      nilai: `${g.path}/${b.nama}`,
-                      judul: b.nama,
-                      // Ukuran naik ke baris kedua, bukan diselipkan dalam
-                      // kurung di judulnya. Di daftar berkas, ukuran adalah
-                      // yang dibandingkan antar baris — ia perlu berdiri di
-                      // kolomnya sendiri supaya bisa dipindai menurun.
-                      ket: `${(b.ukuranBytes / 1e6).toFixed(0)} MB`,
-                      grup: g.path || "(folder utama)",
-                    })),
-                  )}
-                  onPilih={(v) => {
-                    const semua = kelompokSuara.flatMap((g) =>
-                      g.berkas.map((b) => ({ ...b, folder: g.path })),
-                    );
-                    setPilihSuara(semua.find((b) => kunci(b) === v) ?? null);
-                  }}
-                />
-                <p className="hint" style={{ marginTop: 6 }}>
-                  Seluruh audio video hasil diambil dari file ini saja, dan agent memilih
-                  satu topik utuh dari dalamnya. Hanya file ini yang ditranskrip.
-                </p>
-
-                <label style={{ marginTop: 20 }}>Klip B-roll (boleh banyak, opsional)</label>
-                {kelompokVideo.length === 0 ? (
-                  <p className="hint">Tidak ada video di folder bahan agent.</p>
-                ) : (
-                  kelompokVideo.map((g) => (
-                    <div key={g.path} style={{ marginBottom: 12 }}>
-                      <p className="hint mono" style={{ marginBottom: 4 }}>
-                        {g.path || "(folder utama)"}
-                      </p>
-                      <div className="pilihan-daftar">
-                        {g.berkas.map((b) => {
-                          const item = { ...b, folder: g.path };
-                          const dipilih = pilihKlip.some((x) => kunci(x) === kunci(item));
-                          return (
-                            <label key={b.nama} className="pilihan">
-                              <input
-                                type="checkbox"
-                                checked={dipilih}
-                                disabled={busy}
-                                onChange={() =>
-                                  setPilihKlip((p) =>
-                                    dipilih
-                                      ? p.filter((x) => kunci(x) !== kunci(item))
-                                      : [...p, item],
-                                  )
-                                }
-                              />
-                              {/* Kotak dan centang adalah DUA elemen, bukan satu yang
-                                  berubah isi. Saat terpilih, kotaknya benar-benar
-                                  hilang dan yang tersisa hanya centangnya — itulah
-                                  perbedaan pokok dari checkbox biasa, dan menumpuk
-                                  keduanya di satu elemen membuat sisa bingkai masih
-                                  terlihat di balik centang. */}
-                              <span className="pilihan-tanda" aria-hidden>
-                                <span className="pilihan-kotak" />
-                                <svg
-                                  className="pilihan-centang"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.6"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
-                                </svg>
-                              </span>
-                              <span className="pilihan-teks">
-                                <span className="pilihan-judul">{b.nama}</span>
-                                <span className="pilihan-ket">
-                                  {(b.ukuranBytes / 1e6).toFixed(0)} MB
-                                </span>
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))
-                )}
-                {folderKosong.length > 0 && (
-                  <p className="hint" style={{ marginTop: 6 }}>
-                    Folder terbaca tapi masih kosong:{" "}
-                    <span className="mono">
-                      {folderKosong.map((f) => f.path).join(", ")}
-                    </span>
-                    . Taruh berkas di sana dan daftarnya menyusul sendiri dalam
-                    beberapa detik.
-                  </p>
-                )}
-                <p className="hint" style={{ marginTop: 6 }}>
-                  Hanya gambarnya yang dipakai &mdash; suara klip diabaikan, dan klip tidak
-                  perlu bersuara sama sekali.
-                </p>
-              </>
-            ) : (
-              <div className="notice warn">
-                Agent belum melaporkan isi folder bahannya. Pastikan agent sedang
-                berjalan, lalu muat ulang halaman ini.
-              </div>
-            )
-          ) : (
-            <>
-              <label htmlFor="suara">Rekaman suara (satu file)</label>
-              <input
-                id="suara"
-                type="file"
-                accept="video/*,audio/*"
-                required
-                disabled={busy}
-                onChange={(e) => setSuara(e.target.files?.[0] ?? null)}
-              />
-              <p className="hint" style={{ marginTop: 6 }}>
-                Seluruh audio video hasil diambil dari file ini saja, dan agent memilih
-                satu topik utuh dari dalamnya. Hanya file ini yang ditranskrip.
-              </p>
-              {suara && (
-                <div className="hint" style={{ marginTop: 8 }}>
-                  <strong>{suara.name}</strong> &middot; {(suara.size / 1e6).toFixed(0)} MB
-                </div>
-              )}
-
-              <label htmlFor="klip" style={{ marginTop: 20 }}>
-                Klip B-roll (boleh banyak, opsional)
-              </label>
-              <input
-                id="klip"
-                type="file"
-                accept="video/*"
-                multiple
-                disabled={busy}
-                onChange={(e) => setKlip(Array.from(e.target.files ?? []))}
-              />
-              <p className="hint" style={{ marginTop: 6 }}>
-                Hanya gambarnya yang dipakai — suara klip diabaikan, dan klip tidak
-                perlu bersuara sama sekali.
-              </p>
-            </>
-          )}
-
-          {daftarBahan.length > MAKS_MENTAH && (
-            <div className="notice err" style={{ marginTop: 10 }}>
-              Maksimal {MAKS_MENTAH} file per project (1 rekaman suara +{" "}
-              {MAKS_MENTAH - 1} klip). Sekarang {daftarBahan.length}.
-            </div>
-          )}
-          {adaTerlaluBesar && (
-            <div className="notice err" style={{ marginTop: 10 }}>
-              Ada file di atas 5 GB.
-            </div>
-          )}
-        </div>
-
-        {/* ---------- Rasio keluaran ---------- */}
-        <div>
-          <label htmlFor="rasio-out">Rasio keluaran</label>
-          <Dropdown
-            id="rasio-out"
-            nilai={rasioOut}
-            disabled={busy}
-            opsi={RASIO_OUT}
-            onPilih={setRasioOut}
-          />
-          <p className="hint" style={{ marginTop: 6 }}>
-            {rasioOut === "auto"
-              ? "Mengikuti jenis dan konsep. Short selalu 9:16; sisanya memakai rasio video contoh konsepnya."
-              : "Pilihanmu menang atas jenis maupun konsep."}
-          </p>
-        </div>
-
-        {/* ---------- Lagu ---------- */}
-        <div>
-          <label>
-            Lagu (opsional)
-          </label>
-
-          {asal === "lokal" && kelompokLagu.length > 0 ? (
-            // Di mode lokal, lagunya dipilih dari folder bahan yang sama —
-            // agent membacanya di tempat, tanpa satu byte pun naik ke internet.
-            <Dropdown
-              nilai={lagu ? `${lagu.folder}/${lagu.nama}` : ""}
-              placeholder="— tanpa lagu —"
-              disabled={busy}
-              opsi={[
-                { nilai: "", judul: "— tanpa lagu —" },
-                ...kelompokLagu.flatMap((g) =>
-                  g.berkas.map((b) => ({
-                    nilai: `${g.path}/${b.nama}`,
-                    judul: b.nama,
-                    ket: `${(b.ukuranBytes / 1e6).toFixed(0)} MB`,
-                    grup: g.path || "(folder utama)",
-                  })),
-                ),
-              ]}
-              onPilih={(v) => {
-                if (!v) return setLagu(null);
-                const semua = kelompokLagu.flatMap((g) =>
-                  g.berkas.map((b) => ({ ...b, folder: g.path })),
-                );
-                const b = semua.find((x) => kunci(x) === v);
-                setLagu(b ?? null);
-              }}
-            />
-          ) : (
-            <input
-              type="file"
-              accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg"
-              disabled={busy}
-              onChange={(e) => setLaguUnggah(e.target.files?.[0] ?? null)}
-            />
-          )}
-
-          <p className="hint" style={{ marginTop: 6 }}>
-            Dipasang sebagai latar di bawah suara aslinya, pelan, dan meredup di akhir.
-          </p>
-        </div>
-
-        {/* ---------- Konsep ---------- */}
-        <div>
-          <label>Konsep</label>
-
-          <div className="pilihan-grup">
-<label className="pilihan pilihan-radio">
-              <input
-                type="radio"
-                name="sumber"
-                checked={sumber === "pustaka"}
-                disabled={busy || (konsepDimuat && !konsepGagal && concepts.length === 0)}
-                onChange={() => setSumber("pustaka")}
-              />
-              <span className="pilihan-tanda" aria-hidden>
-                <span className="pilihan-cincin" />
-                <span className="pilihan-titik" />
-              </span>
-              <span className="pilihan-teks">
-                <span className="pilihan-judul">Pilih dari pustaka</span>
-              </span>
-            </label>
-            <label className="pilihan pilihan-radio">
-              <input
-                type="radio"
-                name="sumber"
-                checked={sumber === "unggah"}
-                disabled={busy}
-                onChange={() => setSumber("unggah")}
-              />
-              <span className="pilihan-tanda" aria-hidden>
-                <span className="pilihan-cincin" />
-                <span className="pilihan-titik" />
-              </span>
-              <span className="pilihan-teks">
-                <span className="pilihan-judul">Kirim video contoh</span>
-              </span>
-            </label>
-          </div>
-
-          {sumber === "pustaka" ? (
+          {/* Tidak ada lagi pilihan "Kirim video contoh" di sini.
+              Konsep dibuat lebih dulu di halamannya sendiri, dan project
+              memakainya. Membuat konsep sambil lalu di dalam form ini
+              menghasilkan konsep yang diukur dari satu video contoh yang
+              kebetulan ada — dan seluruh gaya hasilnya bergantung pada
+              pengukuran itu. */}
             !konsepDimuat ? (
               <div className="notice info">Memuat konsep&hellip;</div>
             ) : konsepGagal ? (
@@ -802,78 +444,12 @@ export default function NewProjectPage() {
               </div>
             ) : concepts.length === 0 ? (
               <div className="notice info">
-                Belum ada konsep tersimpan. Pilih <strong>Kirim video contoh</strong> untuk
-                membuat yang pertama.
+                Belum ada konsep tersimpan. Buat satu dulu di{" "}
+                <Link href="/video/baru">Konsep baru</Link> — seluruh gaya hasil
+                (panjang, ritme potongan, subtitle, rasio) diukur dari video
+                contoh di sana, jadi tanpa konsep tidak ada yang bisa ditiru.
               </div>
-            ) : (
-              <Dropdown
-                nilai={conceptId}
-                disabled={busy}
-                placeholder="— pilih konsep —"
-                opsi={concepts.map((c) => ({ nilai: c.id, judul: c.nama }))}
-                onPilih={setConceptId}
-              />
-            )
-          ) : (
-            <div className="stack" style={{ gap: 12 }}>
-              <div>
-                <label htmlFor="namaKonsep">Nama konsep</label>
-                <input
-                  id="namaKonsep"
-                  type="text"
-                  value={namaKonsep}
-                  disabled={busy}
-                  placeholder="mis. clipper-motivasi"
-                  onChange={(e) => setNamaKonsep(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="contoh">Video contoh yang sudah jadi (1&ndash;4)</label>
-                <input
-                  id="contoh"
-                  type="file"
-                  accept="video/*"
-                  multiple
-                  disabled={busy}
-                  onChange={(e) => setContoh(Array.from(e.target.files ?? []))}
-                />
-                {contoh.length > MAKS_CONTOH && (
-                  <p className="hint" style={{ color: "#991b1b", marginTop: 6 }}>
-                    Maksimal {MAKS_CONTOH} video.
-                  </p>
-                )}
-                {contoh.length === 1 && (
-                  <p className="hint" style={{ marginTop: 6 }}>
-                    Satu video adalah sampel n=1. Kalau ritmenya kebetulan tidak mewakili
-                    gayamu, konsepnya jadi miring. Dua video atau lebih membuat deviasinya
-                    ikut terukur, dan deviasi itu sendiri jadi informasi.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="rasio">Rasio video hasil</label>
-                <Dropdown
-                  id="rasio"
-                  nilai={rasio}
-                  disabled={busy}
-                  opsi={RASIO.map((r) => ({ nilai: r.v, judul: r.t }))}
-                  onPilih={setRasio}
-                />
-                <p className="hint" style={{ marginTop: 6 }}>
-                  Gambar sumber dipotong dari tengah agar pas. Bisa diubah kapan saja
-                  lewat halaman Konsep.
-                </p>
-              </div>
-
-              <div className="notice info">
-                Konsep baru dibuat dari video ini dan <strong>tidak akan berubah lagi</strong>.
-                Konsep lama tetap utuh. Untuk mengganti gaya, kirim video contoh baru.
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
 
         <div>
           <label htmlFor="brief">Fokus pembahasan (opsional)</label>

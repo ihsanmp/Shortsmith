@@ -184,6 +184,7 @@ def build_edl(
     concept_id: str,
     music: str | None = None,
     music_gain_db: float = -20.0,
+    rujukan: list[list[float]] | None = None,
 ) -> EDL:
     """Ubah rencana potongan menjadi EDL lengkap yang siap dirender."""
     # Tiap potongan membawa nomor video sumbernya; di sinilah nomor itu
@@ -203,7 +204,10 @@ def build_edl(
         temuan = periksa_adegan(
             v.media.path, mulai=c.in_, panjang=c.durasi, crop=v.media.crop
         )
-        titik = lacak(v.media.path, mulai=c.in_, panjang=c.durasi, crop=v.media.crop)
+        titik = lacak(
+            v.media.path, mulai=c.in_, panjang=c.durasi, crop=v.media.crop,
+            rujukan=rujukan,
+        )
         cuts.append(
             Cut(
                 src=v.media.path,
@@ -633,6 +637,19 @@ def run(
                 len(vmap.videos) - 1, profile.nama,
             )
 
+    # Memori subjek untuk job ini: siapa yang harus diikuti bingkai.
+    #
+    # Agent sudah membaca seluruh rekaman saat analisis, jadi siapa subjeknya
+    # bukan tebakan. Penjejak memakainya HANYA saat ia kehilangan orang yang
+    # sedang diikuti — lihat subjek.py untuk kenapa itu penting dan kenapa
+    # memorinya per job, bukan disimpan selamanya.
+    from . import subjek as memori_subjek
+
+    utama = vmap.videos[0]
+    sidik_subjek = memori_subjek.ingat(
+        work, utama.media.path, utama.media.durasi, utama.media.crop
+    )
+
     if pakai_overlay:
         from .overlay import build_overlay_edl
 
@@ -641,7 +658,8 @@ def run(
             vmap,
             profile,
             concept_id=profile.nama,
-            music=siapkan_musik(music, profile, music_gain_db)
+            music=siapkan_musik(music, profile, music_gain_db),
+            rujukan=sidik_subjek,
         )
         renderer_name = renderer_name or "overlay"
         for i, s in enumerate(edl.video, 1):
@@ -653,6 +671,7 @@ def run(
             concept_id=profile.nama,
             music=music,
             music_gain_db=music_gain_db,
+            rujukan=sidik_subjek,
         )
         for i, c in enumerate(edl.cuts, 1):
             log.info("      %2d. [%-8s] vid%d %6.2f-%6.2f (%4.1fs)  %s",
@@ -748,4 +767,17 @@ def run(
     (work / "hasil.json").write_text(
         json.dumps(ringkasan, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+
+    # Memori subjek dihapus begitu videonya jadi.
+    #
+    # Ia cuma perlu benar selama job ini berjalan, dan menyimpannya lebih lama
+    # tidak menambah apa pun. Memori yang menumpuk adalah memori yang suatu saat
+    # dipakai untuk job yang salah — persis yang pernah terjadi dengan
+    # tokoh.json, waktu wajah dari satu video dipakai sebagai patokan untuk
+    # rekaman yang sama sekali lain.
+    #
+    # Dihapus SETELAH hasil.json ditulis: kalau job diulang karena render gagal,
+    # memorinya masih ada dan tidak perlu dibaca ulang dari rekaman.
+    memori_subjek.lupakan(work)
+
     return hasil

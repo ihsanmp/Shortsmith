@@ -28,6 +28,7 @@ bingkai. Saat ragu, kode ini mengembalikan None dan crop tengah tetap dipakai.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -183,7 +184,9 @@ def _wajah_terbesar(
     )
 
 
-def _kandidat_wajah(frame: np.ndarray) -> list[tuple[float, float, float, float]]:
+def _kandidat_wajah(
+    frame: np.ndarray, bahan: list | None = None
+) -> list[tuple[float, float, float, float]]:
     """SEMUA wajah di satu frame: (fx, fy, luas_relatif, arah), terbesar lebih dulu.
 
     Dipakai `lacak`, yang tidak boleh puas dengan wajah terbesar saja. Di
@@ -199,10 +202,13 @@ def _kandidat_wajah(frame: np.ndarray) -> list[tuple[float, float, float, float]
         return []
     _, wajah = det.detect(kecil)
     if wajah is None or len(wajah) == 0:
+        if bahan is not None:
+            bahan.append((kecil, []))
         return []
 
     ph, pw = kecil.shape[0], kecil.shape[1]
     hasil: list[tuple[float, float, float, float]] = []
+    simpan: list = []
     for baris in wajah:
         x, y, bw, bh = baris[:4]
         rel = float(bw * bh) / (ph * pw)
@@ -216,8 +222,14 @@ def _kandidat_wajah(frame: np.ndarray) -> list[tuple[float, float, float, float]
         hasil.append(
             (float((x + bw / 2) / pw), float((y + bh / 2) / ph), rel, arah)
         )
-    hasil.sort(key=lambda t: t[2], reverse=True)
-    return hasil
+        simpan.append(baris)
+    urut = sorted(range(len(hasil)), key=lambda i: hasil[i][2], reverse=True)
+    if bahan is not None:
+        # Frame kecil dan baris deteksinya disimpan supaya sidik wajah bisa
+        # dihitung NANTI, hanya untuk frame yang benar-benar membingungkan
+        # penjejak. Mendekode ulang video untuk itu jauh lebih mahal.
+        bahan.append((kecil, [simpan[i] for i in urut]))
+    return [hasil[i] for i in urut]
 
 
 def mirip(a: list[float] | None, b: list[float] | None) -> float:
@@ -453,8 +465,15 @@ def lacak(
     mulai: float,
     panjang: float,
     crop: str = "",
+    rujukan: list[list[float]] | None = None,
 ) -> list[tuple[float, float, float, float]] | None:
     """Jalur wajah selama satu slot: daftar (detik_relatif, fx, fy, arah).
+
+    `rujukan` adalah sidik wajah subjek video ini, kalau sudah diketahui.
+    Dipakai HANYA saat penjejak kehilangan orang yang sedang diikuti — lihat
+    `_runut`. Tanpa itu, subjek yang bergerak cepat atau sempat tertutup
+    terbaca sebagai orang lain dan bingkainya menunggu satu detik sebelum
+    menyusul.
 
     Dibaca BERURUTAN dari satu titik seek, bukan seek berulang per sampel.
     Menggeser berkas video jauh lebih mahal daripada mendekode frame berikutnya,
@@ -480,6 +499,7 @@ def lacak(
     total_frame = max(1, int(round(panjang * fps_src)))
 
     mentah: list[tuple[float, list[tuple[float, float, float, float]]]] = []
+    bahan: list = [] if rujukan else None
     try:
         cap.set(cv2.CAP_PROP_POS_MSEC, mulai * 1000.0)
         for n in range(total_frame):
@@ -493,13 +513,18 @@ def lacak(
                 frame = frame[y : y + h, x : x + w]
                 if frame.size == 0:
                     continue
-            kandidat = _kandidat_wajah(frame)
+            kandidat = _kandidat_wajah(frame, bahan)
             if kandidat:
                 mentah.append((n / fps_src, kandidat))
+            elif bahan is not None:
+                # Frame tanpa wajah tidak masuk `mentah`, jadi simpanannya juga
+                # harus dibuang -- kalau tidak, nomor sampel dan nomor frame
+                # bergeser dan sidik yang diambil milik frame yang salah.
+                bahan.pop()
     finally:
         cap.release()
 
-    titik = _runut(mentah)
+    titik = _runut(mentah, rujukan, _pembuat_sidik(bahan) if bahan else None)
     if not titik:
         return None
 
@@ -557,6 +582,8 @@ def lacak(
 
 def _runut(
     mentah: list[tuple[float, list[tuple[float, float, float, float]]]],
+    rujukan: list[list[float]] | None = None,
+    sidik_ke: Callable[[int, int], list[float] | None] | None = None,
 ) -> list[tuple[float, float, float, float]]:
     """Pilih SATU orang per frame, dan tetap pada orang itu sampai ia benar-benar
     berganti.
@@ -606,9 +633,19 @@ def _runut(
     hitung = 0
     pindah = 0
 
-    for t, kandidat in mentah:
+    for nomor, (t, kandidat) in enumerate(mentah):
         if pegang is None:
-            pegang = (kandidat[0][0], kandidat[0][1], kandidat[0][3])
+            # Titik awal ikut memakai memori. Tanpa itu, potongan yang dibuka
+            # dengan dua wajah di layar bisa mengunci orang yang salah sejak
+            # frame pertama, dan seluruh sisanya setia pada pilihan yang keliru.
+            awal = kandidat[0]
+            if rujukan and sidik_ke is not None and len(kandidat) > 1:
+                for idx, k in enumerate(kandidat):
+                    sd = sidik_ke(nomor, idx)
+                    if sd is not None and orang_sama(sd, rujukan):
+                        awal = k
+                        break
+            pegang = (awal[0], awal[1], awal[3])
             hasil.append((t, *pegang))
             continue
 
@@ -629,8 +666,32 @@ def _runut(
             hasil.append((t, *pegang))
             continue
 
-        # Orang yang dipegang tidak terlihat lagi di frame ini. Wajah terbesar
-        # jadi calon, tapi belum menang.
+        # Orang yang dipegang tidak terlihat lagi di frame ini.
+        #
+        # DI SINILAH memori subjek dipakai, dan cuma di sini. Kalau wajah yang
+        # muncul ternyata subjek yang sama -- ia bergerak cepat, atau sempat
+        # tertutup lalu muncul di tempat lain -- bingkainya ikut SEKARANG, tanpa
+        # menunggu satu detik. Yang bukan subjek tetap harus mengantre.
+        #
+        # Sidik wajah hanya dihitung di titik ini, bukan tiap frame: terukur
+        # 5,93 ms per wajah lawan 6,27 ms untuk seluruh deteksi frame, jadi
+        # menghitungnya untuk semua kandidat di semua frame akan menambah 189%
+        # waktu pelacakan. Keadaan "bingung" ini terjadi di sekitar 15% sampel.
+        if rujukan and sidik_ke is not None:
+            cocok = None
+            for idx, k in enumerate(kandidat):
+                sd = sidik_ke(nomor, idx)
+                if sd is not None and orang_sama(sd, rujukan):
+                    cocok = k
+                    break
+            if cocok is not None:
+                pegang = (cocok[0], cocok[1], cocok[3])
+                calon, hitung = None, 0
+                pindah += 1
+                hasil.append((t, *pegang))
+                continue
+
+        # Wajah terbesar jadi calon, tapi belum menang.
         baru = (kandidat[0][0], kandidat[0][1], kandidat[0][3])
         if calon is not None and (
             (baru[0] - calon[0]) ** 2 + (baru[1] - calon[1]) ** 2
@@ -658,6 +719,42 @@ def _runut(
             "jalur wajah: %d perpindahan tegas (dari %d sampel) — bingkai dipotong, bukan digeser", pindah, len(mentah)
         )
     return hasil
+
+
+def _pembuat_sidik(bahan: list) -> Callable[[int, int], list[float] | None]:
+    """Penanya sidik wajah yang MALAS, dengan hasil yang diingat.
+
+    Sidik hanya dihitung saat benar-benar ditanyakan. Terukur 5,93 ms per wajah
+    lawan 6,27 ms untuk seluruh deteksi satu frame — menghitungnya untuk semua
+    kandidat di semua frame menambah 189% waktu pelacakan, sementara penjejak
+    hanya membutuhkannya di sekitar 15% sampel.
+
+    Jawabannya diingat karena satu frame bisa ditanya dua kali: sekali untuk
+    memilih kandidat, sekali lagi kalau kandidatnya berganti di putaran
+    berikutnya.
+    """
+    ingat: dict[tuple[int, int], list[float] | None] = {}
+
+    def tanya(nomor: int, indeks: int) -> list[float] | None:
+        kunci = (nomor, indeks)
+        if kunci in ingat:
+            return ingat[kunci]
+
+        hasil: list[float] | None = None
+        rec = _ambil_pengenal()
+        if rec is not None and 0 <= nomor < len(bahan):
+            kecil, baris = bahan[nomor]
+            if 0 <= indeks < len(baris):
+                try:
+                    b = np.asarray(baris[indeks], dtype=np.float32).reshape(1, -1)
+                    vec = rec.feature(rec.alignCrop(kecil, b)).flatten()
+                    hasil = [float(v) for v in vec]
+                except cv2.error as exc:  # noqa: PERF203 - wajah di tepi bisa gagal
+                    log.debug("gagal menghitung sidik saat melacak: %s", exc)
+        ingat[kunci] = hasil
+        return hasil
+
+    return tanya
 
 
 def _kelas_arah(arah: float) -> int:

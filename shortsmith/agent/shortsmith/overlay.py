@@ -80,14 +80,17 @@ MIN_PENDUKUNG = 3
 PORSI_PEMBICARA = 0.0
 
 
-def _jalur(src: str, awal: float, panjang: float, crop: str) -> list[list[float]]:
+def _jalur(
+    src: str, awal: float, panjang: float, crop: str,
+    rujukan: list[list[float]] | None = None,
+) -> list[list[float]]:
     """Jalur wajah untuk satu slot, siap disimpan di VideoSlot.
 
     Dipanggil per slot dan bukan per adegan: satu adegan bisa dipakai sebagian
     saja, dan yang perlu diikuti bingkai adalah gerakan di potongan yang benar-
     benar tampil, bukan rata-rata seluruh adegan.
     """
-    titik = lacak(src, mulai=awal, panjang=panjang, crop=crop)
+    titik = lacak(src, mulai=awal, panjang=panjang, crop=crop, rujukan=rujukan)
     return [[round(t, 3), round(x, 4), round(y, 4), round(a, 3)] for t, x, y, a in titik] if titik else []
 
 
@@ -146,6 +149,7 @@ def susun_broll(
     pembicara: tuple[str, list[PlannedCut], str] | None = None,
     porsi_pembicara: float = PORSI_PEMBICARA,
     kata: list[Word] | None = None,
+    rujukan: list[list[float]] | None = None,
 ) -> list[VideoSlot]:
     """Isi timeline sepanjang `total` detik dengan potongan dari `adegan`.
 
@@ -251,7 +255,7 @@ def susun_broll(
                         fokus_x=fokus_p.fokus_x if fokus_p else None,
                         fokus_y=fokus_p.fokus_y if fokus_p else None,
                         arah=fokus_p.arah if fokus_p else 0.0,
-                        jalur=_jalur(src_p, awal_p, panjang, crop_p),
+                        jalur=_jalur(src_p, awal_p, panjang, crop_p, rujukan),
                         alasan="pembicara (sinkron dengan suara)",
                     )
                 )
@@ -371,7 +375,7 @@ def susun_broll(
                 fokus_x=fx,
                 fokus_y=fy,
                 arah=arah,
-                jalur=_jalur(src, min(awal, batas), panjang, crop_adegan[k]),
+                jalur=_jalur(src, min(awal, batas), panjang, crop_adegan[k], rujukan),
                 alasan=alasan_pilih or f"adegan @{awal_adegan:.1f}s, putaran {putaran // len(kunci) + 1}",
             )
         )
@@ -649,6 +653,7 @@ def build_overlay_edl(
     concept_id: str,
     seed: int | None = None,
     music: Music | None = None,
+    rujukan: list[list[float]] | None = None,
 ) -> OverlayEDL:
     """Rakit OverlayEDL dari rencana potongan suara + klip yang tersedia."""
     suara = vmap.videos[0]
@@ -710,6 +715,7 @@ def build_overlay_edl(
         # Angkanya datang dari konsep, bukan dari konstanta di modul ini.
         # Ganti video contoh -> ganti gaya, tanpa menyentuh kode.
         porsi_pembicara=profile.porsi_pembicara,
+        rujukan=rujukan,
     )
 
     _sejajarkan_frame(slots, SETTINGS.fps)

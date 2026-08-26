@@ -260,10 +260,15 @@ def siapkan_peta(
     job_id: str | None = None,
     refresh: bool = False,
     on_progress: Callable[[int, str], None] | None = None,
-) -> tuple[ProjectMap, Path, str]:
+) -> tuple[ProjectMap, Path, str, list[Path]]:
     """Analisis saja: transkrip, deteksi adegan, pelabelan. Tanpa merender apa pun.
 
-    Kembalikan (peta, folder kerja, job_id).
+    Kembalikan (peta, folder kerja, job_id, daftar berkas).
+
+    Daftar berkasnya ikut dikembalikan, bukan dibiarkan dihitung ulang pemanggil.
+    Di sinilah berkas ganda dibuang, jadi daftar yang dihitung ulang di luar
+    BISA berbeda isinya -- dan manifes job akan menyebut berkas yang sebenarnya
+    tidak dipakai.
 
     Dipisah dari `run` karena ada yang harus terjadi DI ANTARA analisis dan
     render: saat kolom topik dikosongkan, topik rekaman dibaca lebih dulu lalu
@@ -380,7 +385,60 @@ def siapkan_peta(
         vmap.videos[0].media.durasi, len(klip), sum(v.media.durasi for v in klip),
     )
 
-    return vmap, work, job_id
+    return vmap, work, job_id, paths
+
+
+def _render_topik(
+    topik: list[str],
+    sources,
+    profile,
+    output: Path,
+    jenis: str,
+    job_id: str | None,
+    on_progress,
+    on_klip: Callable[[Path], None] | None,
+    kw: dict,
+) -> list[Path]:
+    """Render satu klip per topik. Daftar kosong berarti satu klip tanpa arahan.
+
+    Dipisah karena dipanggil dari DUA tempat: alur biasa, dan jalan pintas untuk
+    job yang diulang dan pilihan topiknya sudah tersimpan. Menyalin loopnya ke
+    dua tempat berarti perbaikan di satu sisi diam-diam tidak sampai ke sisi lain.
+    """
+    if not topik:
+        # Rekaman pendek, pencarian topik gagal, atau pengguna sengaja tidak
+        # mencentang apa pun: satu klip tanpa arahan, persis perilaku lama.
+        log.info("tidak ada topik terpilih — dibuat satu klip tanpa arahan")
+        satu = run(
+            sources, profile, output,
+            brief="", job_id=job_id, on_progress=on_progress, jenis=jenis, **kw,
+        )
+        if satu is not None:
+            _lapor_klip(on_klip, satu)
+        return [satu] if satu else []
+
+    hasil: list[Path] = []
+    for i, t in enumerate(topik, start=1):
+        keluar = output if i == 1 else output.with_name(f"{output.stem}-{i}{output.suffix}")
+        log.info("=== klip %d dari %d: %s", i, len(topik), t[:90])
+        try:
+            # Kegagalan satu klip TIDAK menggagalkan sisanya. Klip yang sudah
+            # jadi sudah bernilai; membuang semuanya karena klip keempat gagal
+            # berarti pengguna tidak mendapat apa pun, dan job diulang dari nol
+            # termasuk transkrip satu jam itu.
+            k = run(
+                sources, profile, keluar,
+                brief=t, job_id=job_id, sufiks="" if i == 1 else f"_{i}",
+                on_progress=on_progress, jenis=jenis, **kw,
+            )
+            if k:
+                hasil.append(k)
+                _lapor_klip(on_klip, k)
+        except Exception:  # noqa: BLE001
+            log.exception("klip %d gagal — dilewati", i)
+
+    log.info("%d klip dihasilkan dari satu rekaman", len(hasil))
+    return hasil
 
 
 def run_banyak(
@@ -394,6 +452,7 @@ def run_banyak(
     on_progress=None,
     on_klip: Callable[[Path], None] | None = None,
     minta_topik: Callable[[list[str]], list[str]] | None = None,
+    topik_lama: Callable[[], list[str] | None] | None = None,
     **kw,
 ) -> list[Path]:
     """Jalankan pipeline, menghasilkan BEBERAPA klip kalau topiknya dikosongkan.
@@ -428,10 +487,33 @@ def run_banyak(
             _lapor_klip(on_klip, satu)
         return [satu] if satu else []
 
-    vmap, work, job_id = siapkan_peta(
+    vmap, work, job_id, _ = siapkan_peta(
         sources, profile, job_id=job_id,
         refresh=kw.get("refresh", False), on_progress=on_progress,
     )
+
+    # Job yang diulang tidak bertanya lagi, dan tidak mencari topik lagi.
+    #
+    # Job yang gagal dikembalikan ke antrean dan dikerjakan ulang dari awal.
+    # Tanpa pemeriksaan ini, pengguna ditanya untuk kedua kalinya -- terjadi
+    # sungguhan -- dan `cari_topik` membakar satu panggilan model untuk
+    # pertanyaan yang jawabannya sudah ada.
+    #
+    # Diperiksa SEBELUM `cari_topik`, bukan sesudahnya: model tidak menjawab
+    # persis sama dua kali, jadi membandingkan daftar hasilnya tidak bisa
+    # diandalkan untuk mengenali pertanyaan yang sama.
+    if topik_lama is not None:
+        try:
+            simpan = topik_lama()
+        except Exception:  # noqa: BLE001
+            simpan = None
+        if simpan is not None:
+            log.info(
+                "pilihan topik dari percobaan sebelumnya dipakai: %d topik", len(simpan)
+            )
+            return _render_topik(
+                simpan, sources, profile, output, jenis, job_id, on_progress, on_klip, kw
+            )
 
     durasi = max((v.media.durasi for v in vmap.videos), default=0.0)
     topik = cari_topik(vmap, profile, jumlah_klip(durasi))
@@ -448,40 +530,9 @@ def run_banyak(
         except Exception:  # noqa: BLE001
             log.warning("gagal menanyakan pilihan topik — semua topik dipakai", exc_info=True)
 
-    # Tidak ada topik sama sekali (rekaman pendek, atau pencariannya gagal):
-    # satu klip tanpa arahan, persis perilaku lama.
-    if not topik:
-        log.info("tidak ada topik terpilih — dibuat satu klip tanpa arahan")
-        satu = run(
-            sources, profile, output,
-            brief="", job_id=job_id, on_progress=on_progress, jenis=jenis, **kw,
-        )
-        if satu is not None:
-            _lapor_klip(on_klip, satu)
-        return [satu] if satu else []
-
-    hasil: list[Path] = []
-    for i, t in enumerate(topik, start=1):
-        keluar = output if i == 1 else output.with_name(f"{output.stem}-{i}{output.suffix}")
-        log.info("=== klip %d dari %d: %s", i, len(topik), t[:90])
-        try:
-            # Kegagalan satu klip TIDAK menggagalkan sisanya. Klip yang sudah
-            # jadi sudah bernilai; membuang semuanya karena klip keempat gagal
-            # berarti pengguna tidak mendapat apa pun, dan job diulang dari nol
-            # termasuk transkrip satu jam itu.
-            k = run(
-                sources, profile, keluar,
-                brief=t, job_id=job_id, sufiks="" if i == 1 else f"_{i}",
-                on_progress=on_progress, jenis=jenis, **kw,
-            )
-            if k:
-                hasil.append(k)
-                _lapor_klip(on_klip, k)
-        except Exception:  # noqa: BLE001
-            log.exception("klip %d gagal — dilewati", i)
-
-    log.info("%d klip dihasilkan dari satu rekaman", len(hasil))
-    return hasil
+    return _render_topik(
+        topik, sources, profile, output, jenis, job_id, on_progress, on_klip, kw
+    )
 
 
 def run(
@@ -513,7 +564,7 @@ def run(
 
     daftar = [sources] if isinstance(sources, (str, Path)) else list(sources)
     output = Path(output).resolve()
-    vmap, work, job_id = siapkan_peta(
+    vmap, work, job_id, paths = siapkan_peta(
         daftar, profile, job_id=job_id, refresh=refresh, on_progress=on_progress
     )
     plan_file = work / f"plan{sufiks}.json"

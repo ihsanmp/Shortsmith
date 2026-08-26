@@ -450,6 +450,7 @@ class Daemon:
                 on_progress=progress,
                 on_klip=unggah_nanti,
                 minta_topik=lambda t: self._tanya_topik(job['id'], t, hb),
+                topik_lama=lambda: self._topik_tersimpan(job['id']),
             )
             if not klip:
                 raise RuntimeError("Pipeline tidak menghasilkan file.")
@@ -493,6 +494,27 @@ class Daemon:
             )
             return True
         return False
+
+    def _topik_tersimpan(self, job_id: str) -> list[str] | None:
+        """Pilihan topik yang sudah pernah diberikan untuk job ini, kalau ada.
+
+        Dipakai saat job diulang. Job yang gagal dikembalikan ke antrean dan
+        dikerjakan ulang dari awal; tanpa ini pengguna ditanya untuk kedua
+        kalinya, dan `cari_topik` membakar satu panggilan model untuk pertanyaan
+        yang jawabannya sudah tersimpan.
+
+        Terjadi sungguhan: satu job selesai merender 45 MB lalu jatuh di langkah
+        terakhir, dan panel centangnya muncul lagi dengan daftar yang sama.
+
+        None berarti belum pernah dijawab — bukan berarti gagal bertanya. Galat
+        jaringan juga mengembalikan None, dan itu benar: alurnya lalu berjalan
+        seperti biasa, yaitu bertanya.
+        """
+        try:
+            return self.api.pilihan_topik(job_id)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("gagal membaca pilihan topik tersimpan (%s)", exc)
+            return None
 
     def _tanya_topik(
         self, job_id: str, topik: list[str], hb: Heartbeat

@@ -51,16 +51,37 @@ export async function POST(request: Request, { params }: Params) {
     return Response.json({ error: "Daftar topik tidak valid" }, { status: 400 });
   }
 
-  // `topikPilih` dinolkan bersamaan. Kalau job ini diulang, pilihan lama harus
-  // ikut hangus — kalau tidak, agent langsung membaca centangan untuk daftar
-  // topik yang sudah tidak ada lagi.
-  const [row] = await db
+  const [lama] = await db
+    .select({ usul: jobs.topikUsul, pilih: jobs.topikPilih })
+    .from(jobs)
+    .where(eq(jobs.id, id));
+  if (!lama) return Response.json({ error: "Job tidak ada" }, { status: 404 });
+
+  // Pertanyaan yang SAMA tidak ditanyakan dua kali.
+  //
+  // Job yang gagal dikembalikan ke antrean dan dikerjakan ulang dari awal,
+  // termasuk membaca topiknya lagi. Versi pertama selalu menolkan `topikPilih`
+  // di sini, jadi jawaban yang sudah diberikan hangus dan panel centangnya
+  // muncul lagi — terjadi sungguhan: satu job gagal di langkah terakhir, dan
+  // pengguna ditanya dua kali untuk daftar topik yang persis sama.
+  //
+  // Daftar yang identik berarti pertanyaannya identik, jadi jawabannya masih
+  // berlaku dan job lanjut tanpa menunggu. Daftar yang berbeda memang
+  // pertanyaan baru, dan jawaban lama tidak bisa dipetakan ke sana.
+  const sama =
+    lama.usul !== null &&
+    lama.usul.length === usul.length &&
+    lama.usul.every((t, i) => t === usul[i]);
+
+  if (sama && lama.pilih !== null) {
+    return Response.json({ ok: true, jumlah: usul.length, pilihanDipertahankan: true });
+  }
+
+  await db
     .update(jobs)
     .set({ topikUsul: usul, topikPilih: null })
-    .where(eq(jobs.id, id))
-    .returning({ id: jobs.id });
+    .where(eq(jobs.id, id));
 
-  if (!row) return Response.json({ error: "Job tidak ada" }, { status: 404 });
   return Response.json({ ok: true, jumlah: usul.length });
 }
 

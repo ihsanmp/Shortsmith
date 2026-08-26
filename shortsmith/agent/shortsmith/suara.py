@@ -186,6 +186,12 @@ def ratakan_edl(edl) -> int:
 # Memilih bagian lagu yang dipakai
 # --------------------------------------------------------------------------
 
+# Persentil yang dipakai menilai satu bagian lagu.
+#
+# Sepuluh, bukan nol: satu titik ukur yang kebetulan jatuh di jeda antar bar
+# tidak boleh menggugurkan seluruh bagian yang sebenarnya bagus.
+PERSENTIL_DASAR = 10
+
 # Seberapa berat keragaman dihukum saat memilih bagian lagu.
 #
 # Bukan sekadar "pilih yang paling keras". Lagu ini dipasang DI BAWAH ucapan,
@@ -259,7 +265,21 @@ def pilih_bagian(src: str, durasi: float) -> float:
     while mulai + durasi <= tt[-1]:
         sel = vv[(tt >= mulai) & (tt < mulai + durasi)]
         if sel.size >= 5:
-            skor = float(np.median(sel)) - BOBOT_RAGAM * float(np.std(sel))
+            # Persentil 10, bukan median dikurangi sebaran.
+            #
+            # Yang menentukan untuk musik latar bukan seberapa keras rata-rata
+            # bagiannya, melainkan seberapa SENYAP bagian terdalamnya: di situlah
+            # ia hilang di bawah ucapan, dan pendengar membacanya sebagai lagu
+            # yang berhenti. Median tidak peka terhadap lubang — bagian yang 98
+            # detiknya keras dan 10 detiknya senyap tetap bermedian bagus.
+            #
+            # Diukur pada satu lagu nyata untuk jendela 108 detik:
+            #
+            #     median - 0,5*std   -> mulai  85s, bagian terendah -10,5 LUFS
+            #     persentil 10       -> mulai  15s, bagian terendah  -8,4 LUFS
+            #
+            # Dua LU lebih tinggi di titik paling rawannya.
+            skor = float(np.percentile(sel, PERSENTIL_DASAR))
             if skor > skor_terbaik:
                 skor_terbaik, terbaik = skor, mulai
         mulai += LANGKAH_CARI

@@ -142,7 +142,10 @@ def _lapor_klip(on_klip: Callable[[Path], None] | None, k: Path) -> None:
 
 
 def siapkan_musik(
-    music: str | None, profile: ConceptProfile, gain_db: float
+    music: str | None,
+    profile: ConceptProfile,
+    gain_db: float,
+    panjang: float = 0.0,
 ) -> Music | None:
     """Rakit objek Music, atau None kalau tidak ada lagu yang dipilih.
 
@@ -171,7 +174,17 @@ def siapkan_musik(
     jalur = str(Path(sumber).resolve())
     # Bagian lagunya dipilih dari panjang video, bukan selalu dari detik nol.
     # Alasan dan ukurannya ada di pilih_bagian.
-    mulai = pilih_bagian(jalur, profile.target_duration())
+    #
+    # Yang dipakai panjang video YANG SEBENARNYA, bukan target konsep.
+    #
+    # Sebelum ini dipakai `profile.target_duration()`, dan itu angka dari video
+    # CONTOH — bukan dari video yang sedang dibuat. Terukur pada satu job:
+    # konsepnya bertarget 42,3 detik sementara videonya jadi 108,5 detik, jadi
+    # pilih_bagian menyimpulkan mulai detik 140 aman padahal lagunya cuma 216
+    # detik. Musiknya habis di detik 76 video (1:16), masuk ke ekor lagu yang
+    # memudar, lalu melompat balik -- yang terdengar sebagai lagu yang berhenti
+    # di tengah video.
+    mulai = pilih_bagian(jalur, panjang or profile.target_duration())
     log.info("musik: %s @ %.0f dB, mulai %.0f detik", Path(sumber).name, gain_db, mulai)
     return Music(src=jalur, gain_db=gain_db, mulai=mulai)
 
@@ -236,7 +249,9 @@ def build_edl(
     # Kekerasannya tetap datang dari jenis video lewat parameter, bukan angka
     # tetap di sini — walau ketiga jenis yang tersisa sama-sama memakai -20 dB,
     # yaitu latar yang terdengar tanpa menutupi ucapan.
-    music_obj = siapkan_musik(music, profile, music_gain_db)
+    music_obj = siapkan_musik(
+        music, profile, music_gain_db, sum(c.durasi for c in plan.cuts)
+    )
 
     # Rasio keluaran mengikuti konsep, bukan angka tetap di config. Konsep
     # "clipper 3:4" dan "vlog 9:16" bisa hidup berdampingan tanpa saling
@@ -658,7 +673,9 @@ def run(
             vmap,
             profile,
             concept_id=profile.nama,
-            music=siapkan_musik(music, profile, music_gain_db),
+            music=siapkan_musik(
+                music, profile, music_gain_db, sum(c.durasi for c in plan.cuts)
+            ),
             rujukan=sidik_subjek,
         )
         renderer_name = renderer_name or "overlay"

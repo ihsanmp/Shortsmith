@@ -41,10 +41,22 @@ export async function GET(request: Request) {
     return Response.json({ job: null, tugas: await ambilTugas() }, { status: 200 });
   }
 
+  // Dicocokkan PERSIS, bukan lewat "yang bukan render berarti konsep".
+  //
+  // Percabangan lama memilih jalur konsep untuk nilai apa pun yang bukan
+  // "render" — termasuk undefined. Satu baris job yang bermasalah karena itu
+  // dikirim ke pembangun muatan yang salah, dan hasilnya muatan tanpa `id`
+  // yang sempat mematikan agent. Sekarang tipe yang tidak dikenal ditolak
+  // dengan menyebut nilainya.
   if (job.tipe === "render") {
     return Response.json({ job: await buildRenderPayload(job) });
   }
-  return Response.json({ job: await buildProfilePayload(job) });
+  if (job.tipe === "profile_extraction") {
+    return Response.json({ job: await buildProfilePayload(job) });
+  }
+
+  console.error(`[jobs/next] tipe job tidak dikenal: ${JSON.stringify(job.tipe)}`);
+  return Response.json({ job: null, tugas: await ambilTugas() }, { status: 200 });
 }
 
 async function buildRenderPayload(job: {

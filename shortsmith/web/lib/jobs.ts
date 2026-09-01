@@ -28,6 +28,29 @@ export async function claimNextJob(): Promise<ClaimedJob | null> {
   const rows = await db.execute<ClaimedJob>(claimNextJobSql());
   const job = rows[0] ?? null;
 
+  // Baris yang terambil TAPI tidak punya id diperlakukan sebagai tidak ada job.
+  //
+  // Tanpa penjagaan ini, baris seperti itu diteruskan ke pembangun muatan, yang
+  // dengan senang hati menyusun jawaban dari field-field bawaannya saja —
+  // `job.id` dan `job.tipe` yang undefined hilang begitu saja saat JSON
+  // dirangkai. Agent menerima muatan yang terlihat sah bentuknya:
+  //
+  //     {"nama": "", "profileJson": null, "inputs": [], "output": null}
+  //
+  // dan sempat MATI karenanya (KeyError: 'id') sebelum ia diajari bertahan.
+  // Cacat yang sebenarnya ada di sini: yang tidak punya id bukan job.
+  //
+  // `job.tipe` juga dipilih diam-diam oleh percabangan di /api/jobs/next —
+  // yang bukan "render" jatuh ke jalur konsep, jadi `undefined` mengirim job
+  // render ke pembangun muatan yang salah tanpa satu pun peringatan.
+  if (job && (!job.id || !job.tipe)) {
+    console.error(
+      "[claimNextJob] baris job tanpa id/tipe, diabaikan:",
+      JSON.stringify(job).slice(0, 300),
+    );
+    return null;
+  }
+
   if (job?.project_id) {
     await db
       .update(projects)

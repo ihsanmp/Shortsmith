@@ -113,6 +113,8 @@ export async function POST(request: Request) {
 
   let conceptId: string;
   let jobEkstraksi: string | null = null;
+  let salinanProfil: Record<string, unknown> | null = null;
+  let salinanNama: string | null = null;
 
   if (body.konsepBaru) {
     // --- Jalur B: video contoh diunggah bersamaan dengan video mentah ---
@@ -163,7 +165,12 @@ export async function POST(request: Request) {
   } else {
     // --- Jalur A: konsep yang sudah ada, dipakai apa adanya ---
     const [concept] = await db
-      .select({ id: conceptProfiles.id, siap: conceptProfiles.siap })
+      .select({
+        id: conceptProfiles.id,
+        siap: conceptProfiles.siap,
+        nama: conceptProfiles.nama,
+        profileJson: conceptProfiles.profileJson,
+      })
       .from(conceptProfiles)
       .where(eq(conceptProfiles.id, body.conceptId!))
       .limit(1);
@@ -178,14 +185,26 @@ export async function POST(request: Request) {
       );
     }
     conceptId = concept.id;
+    salinanProfil = concept.profileJson as Record<string, unknown>;
+    salinanNama = concept.nama;
   }
 
-  
+  // Profil konsep DISALIN ke project, bukan sekadar ditunjuk.
+  //
+  // Dua akibat, keduanya diinginkan. Konsepnya bisa dihapus tanpa menyentuh
+  // project ini. Dan mengedit konsep tidak lagi diam-diam mengubah gaya project
+  // lama saat dirender ulang — tiap project mengingat angka yang benar-benar
+  // dipakainya.
+  //
+  // Jalur konsep baru belum punya profil terukur (agent yang mengisinya nanti),
+  // jadi salinannya menyusul lewat jalur ekstraksi.
   const [project] = await db
     .insert(projects)
     .values({
       judul: body.judul,
       conceptId,
+      profilJson: salinanProfil,
+      konsepNama: salinanNama,
       brief: body.brief,
       jenis: body.jenis,
       rasio: body.rasio,

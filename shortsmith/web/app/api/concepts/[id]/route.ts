@@ -20,6 +20,9 @@ const PatchBody = z.object({
   nama: z.string().min(1).max(120).optional(),
   isDefault: z.boolean().optional(),
   profileJson: z.record(z.unknown()).optional(),
+  // Sembunyikan dari daftar pilihan tanpa menghapus barisnya. Lihat komentar
+  // kolom `arsip` di db/schema.ts.
+  arsip: z.boolean().optional(),
 });
 
 export async function GET(_request: Request, { params }: Params) {
@@ -57,6 +60,11 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(body.nama !== undefined ? { nama: body.nama } : {}),
       ...(body.isDefault !== undefined ? { isDefault: body.isDefault } : {}),
       ...(body.profileJson !== undefined ? { profileJson: body.profileJson } : {}),
+      ...(body.arsip !== undefined ? { arsip: body.arsip } : {}),
+      // Konsep yang diarsipkan tidak boleh tetap jadi bawaan: ia tidak muncul
+      // di daftar, jadi bawaan yang menunjuk ke sana adalah bawaan yang tidak
+      // bisa dilihat maupun diganti dari mana pun.
+      ...(body.arsip === true ? { isDefault: false } : {}),
     })
     .where(eq(conceptProfiles.id, id))
     .returning();
@@ -93,16 +101,21 @@ export async function POST(_request: Request, { params }: Params) {
 /**
  * Hapus konsep beserta video contohnya di storage.
  *
- * ## Kenapa project pemakai memblokir, bukan ikut terhapus
+ * ## Kenapa project pemakai tidak lagi memblokir, dan tidak ikut terhapus
  *
- * `projects.concept_id` memakai `onDelete: "restrict"` — itu keputusan yang
- * disengaja. Konsep dipakai berulang, dan menghapusnya secara berantai akan
- * melenyapkan project beserta hasil rendernya hanya karena pengguna merapikan
- * daftar konsep. Kehilangan yang tidak diminta dan tidak bisa dibatalkan.
+ * Keduanya pernah jadi pilihan, dan keduanya buruk. Memblokir berarti konsep
+ * yang pernah dipakai tidak bisa dihapus selamanya, dengan satu-satunya jalan
+ * keluar "hapus dulu 18 project-nya". Menghapus berantai berarti merapikan
+ * daftar konsep melenyapkan hasil render — kehilangan yang tidak diminta dan
+ * tidak bisa dibatalkan.
  *
- * Tanpa pemeriksaan di sini, database tetap menolak — tapi yang sampai ke
- * pengguna adalah kegagalan constraint yang tidak bisa ditindaklanjuti. Jadi
- * diperiksa lebih dulu, dan jumlah project pemakainya disebutkan.
+ * Jalan ketiga: project tidak lagi BERGANTUNG pada konsepnya. Yang sebenarnya
+ * ia butuhkan cuma profilnya, dan itu sekarang disalin ke `projects.profil_json`
+ * saat project dibuat. Tautannya tinggal keterangan asal-usul, jadi
+ * `onDelete: "set null"` sudah cukup.
+ *
+ * Menghapus konsep sekarang tidak menyentuh satu pun project: hasil rendernya
+ * utuh, gayanya utuh, dan namanya tetap terbaca dari `konsep_nama`.
  */
 export async function DELETE(_request: Request, { params }: Params) {
   const { id } = await params;
@@ -115,23 +128,16 @@ export async function DELETE(_request: Request, { params }: Params) {
     return Response.json({ error: "Konsep tidak ditemukan" }, { status: 404 });
   }
 
-  const pemakai = await db
-    .select({ id: projects.id, judul: projects.judul })
-    .from(projects)
-    .where(eq(projects.conceptId, id));
-  if (pemakai.length > 0) {
-    return Response.json(
-      {
-        error: `Konsep ini masih dipakai ${pemakai.length} project.`,
-        detail:
-          "Hapus project-nya lebih dulu, atau biarkan konsepnya — konsep yang " +
-          "tidak dipilih tidak mengganggu apa pun.",
-        projects: pemakai.slice(0, 5).map((p) => p.judul),
-      },
-      { status: 409 },
-    );
-  }
-
+  // Project pemakai TIDAK lagi memblokir.
+  //
+  // Dulu `projects.concept_id` NOT NULL dengan onDelete: "restrict", jadi
+  // konsep yang pernah dipakai tidak bisa dihapus selamanya — dan satu-satunya
+  // jalan keluar yang ditawarkan adalah menghapus project beserta hasil
+  // rendernya, ongkos yang jauh lebih besar daripada yang diminta.
+  //
+  // Sekarang tiap project menyimpan SALINAN profil konsepnya (projects.profil_json)
+  // dan namanya, jadi tautannya tinggal keterangan asal-usul. Menghapus konsep
+  // menjadikan concept_id NULL; project, hasil render, dan gayanya tetap utuh.
   // Video contoh dibersihkan LEBIH DULU. Kalau urutannya dibalik dan storage
   // gagal, key-nya sudah hilang dari database dan berkasnya jadi yatim:
   // menempati ruang selamanya tanpa ada cara menemukannya lagi.

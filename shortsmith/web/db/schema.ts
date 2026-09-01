@@ -114,6 +114,16 @@ export const conceptProfiles = pgTable("concept_profiles", {
   sampleVideoUrls: text("sample_video_urls").array().notNull().default([]),
   isDefault: boolean("is_default").notNull().default(false),
   siap: boolean("siap").notNull().default(false),
+
+  // Disembunyikan dari daftar pilihan, TANPA menghapus barisnya.
+  //
+  // Konsep yang masih dipakai project tidak bisa dihapus — `projects.concept_id`
+  // memakai onDelete: "restrict", supaya merapikan daftar konsep tidak pernah
+  // melenyapkan project beserta hasil rendernya. Tapi yang diinginkan pengguna
+  // saat menekan Hapus biasanya "jangan tampilkan lagi", bukan "musnahkan".
+  //
+  // Arsip memberi itu tanpa menyentuh satu pun project.
+  arsip: boolean("arsip").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -122,9 +132,30 @@ export const projects = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     judul: text("judul").notNull().default("Tanpa judul"),
-    conceptId: uuid("concept_id")
-      .notNull()
-      .references(() => conceptProfiles.id, { onDelete: "restrict" }),
+    // Boleh NULL, dan hilangnya konsep TIDAK menghapus project.
+    //
+    // Dulu NOT NULL dengan onDelete: "restrict", jadi konsep yang pernah
+    // dipakai tidak bisa dihapus selamanya — dan satu-satunya jalan keluar yang
+    // ditawarkan adalah menghapus project beserta hasil rendernya.
+    //
+    // Yang sebenarnya dibutuhkan project dari konsep cuma profilnya, dan itu
+    // sekarang disalin ke `profilJson` di bawah. Tautannya tinggal keterangan
+    // asal-usul, bukan penopang.
+    conceptId: uuid("concept_id").references(() => conceptProfiles.id, {
+      onDelete: "set null",
+    }),
+
+    // Salinan profil konsep pada saat project ini dibuat.
+    //
+    // Bukan sekadar supaya konsepnya bisa dihapus. Ia juga MENGUNCI arti
+    // project: sebelum ini, mengedit konsep diam-diam mengubah gaya project
+    // lama kalau dirender ulang, padahal project itu dibuat dengan angka yang
+    // berbeda. Sekarang tiap project mengingat gaya yang benar-benar dipakainya.
+    profilJson: jsonb("profil_json").$type<Record<string, unknown>>(),
+
+    // Nama konsepnya saat itu, untuk ditampilkan setelah konsepnya hilang.
+    konsepNama: text("konsep_nama"),
+
     brief: text("brief").notNull().default(""),
     jenis: videoJenis("jenis").notNull().default("short"),
     /**

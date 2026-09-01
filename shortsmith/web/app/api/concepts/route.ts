@@ -22,20 +22,26 @@ const CreateBody = z.object({
 
 });
 
-export async function GET() {
+export async function GET(request: Request) {
+  // `?semua=1` untuk halaman pengelolaan konsep, yang harus tetap melihat yang
+  // diarsipkan supaya bisa mengembalikannya. Tanpa itu, mengarsipkan berarti
+  // kehilangan cara membatalkannya.
+  const semua = new URL(request.url).searchParams.get("semua") === "1";
+
   const rows = await db
     .select({
       id: conceptProfiles.id,
       nama: conceptProfiles.nama,
       siap: conceptProfiles.siap,
       isDefault: conceptProfiles.isDefault,
+      arsip: conceptProfiles.arsip,
       profileJson: conceptProfiles.profileJson,
       createdAt: conceptProfiles.createdAt,
     })
     .from(conceptProfiles)
     .orderBy(desc(conceptProfiles.createdAt));
 
-  return Response.json({ concepts: rows });
+  return Response.json({ concepts: semua ? rows : rows.filter((r) => !r.arsip) });
 }
 
 export async function POST(request: Request) {

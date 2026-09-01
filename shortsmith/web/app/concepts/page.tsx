@@ -102,8 +102,14 @@ export default async function ConceptsPage() {
                   <div className="konsep-label">
                     {c.isDefault && <span className="tag done">default</span>}
                     {!c.siap && <span className="tag pending">menganalisis</span>}
+                    {c.arsip && <span className="tag pending">diarsipkan</span>}
                   </div>
-                  <HapusKonsep id={c.id} nama={c.nama} className="konsep-hapus" />
+                  <HapusKonsep
+                    id={c.id}
+                    nama={c.nama}
+                    arsip={c.arsip}
+                    className="konsep-hapus"
+                  />
                 </div>
               </article>
             );

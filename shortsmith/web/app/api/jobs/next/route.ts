@@ -135,7 +135,15 @@ async function buildRenderPayload(job: {
     conceptId: job.concept_id,
     brief: project?.brief ?? "",
     judul: project?.judul ?? "",
-    profileJson: concept?.profileJson ?? null,
+    // Salinan milik project MENANG atas konsepnya.
+    //
+    // Project menyimpan profil yang dipakai saat ia dibuat, jadi konsep yang
+    // sudah dihapus tidak membuatnya kehilangan gaya — dan konsep yang DIEDIT
+    // tidak diam-diam mengubah arti project lama saat dirender ulang.
+    //
+    // Konsep dipakai sebagai cadangan untuk project lama yang salinannya belum
+    // pernah terisi.
+    profileJson: project?.profilJson ?? concept?.profileJson ?? null,
     jenis: project?.jenis ?? "short",
     rasio: project?.rasio ?? "auto",
     inputs,

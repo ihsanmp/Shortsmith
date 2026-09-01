@@ -72,6 +72,18 @@
    ========================================================================== */
 
 :root {
+  /* Alias untuk komponen yang ditempel dari luar dengan penamaan Vercel/Geist.
+     Dibuat sebagai ALIAS, bukan warna baru: dua palet dalam satu berkas berarti
+     dua tempat yang harus diingat setiap kali warna berubah, dan yang satu
+     pasti tertinggal. Lihat components/ui/progress.tsx. */
+  --ds-gray-200: var(--line);
+  --ds-gray-700: var(--ink-3);
+  --ds-gray-1000: var(--ink);
+  --ds-blue-700: var(--accent);
+  --ds-red-700: var(--err);
+  --ds-amber-700: var(--warn);
+  --ds-progress-color: var(--ds-gray-1000);
+
   --bg: #0b0d18;
   --surface: #141728;
   --surface-2: #191d33;
@@ -4291,6 +4303,45 @@ body:has(.hero) {
   font-size: 0.8rem;
   line-height: 1.6;
   color: var(--ink-4);
+}
+
+/* ==========================================================================
+   Bilah progres tipis (components/ui/progress.tsx)
+
+   Aturan di bawah inilah yang membuat prop `colors` dan `type` berpengaruh.
+   Komponen aslinya menyetel --ds-progress-color lewat style tapi tidak ada yang
+   membacanya, jadi bilahnya selalu berwarna bawaan peramban.
+
+   Pseudo-element progress tidak bisa digabung jadi satu selector: peramban
+   membuang SELURUH aturan kalau ada satu selector yang tidak ia kenal.
+   ========================================================================== */
+
+.progress-ds::-webkit-progress-bar {
+  background: var(--ds-gray-200);
+  border-radius: 5px;
+}
+
+.progress-ds::-webkit-progress-value {
+  background: var(--ds-progress-color);
+  border-radius: 5px;
+  transition: width var(--t);
+}
+
+.progress-ds::-moz-progress-bar {
+  background: var(--ds-progress-color);
+  border-radius: 5px;
+}
+
+/* Firefox mewarnai bilah dasarnya lewat elemennya sendiri, bukan pseudo. */
+.progress-ds {
+  background: var(--ds-gray-200);
+  border-radius: 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-ds::-webkit-progress-value {
+    transition: none;
+  }
 }
 
 /* ==========================================================================

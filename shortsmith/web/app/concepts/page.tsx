@@ -1,8 +1,9 @@
-import { desc } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
-import { conceptProfiles } from "@/db/schema";
+import { conceptProfiles, jobs } from "@/db/schema";
 import { HapusKonsep } from "@/components/ui/hapus-konsep";
+import { Progress } from "@/components/ui/progress";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,39 @@ export default async function ConceptsPage() {
     .select()
     .from(conceptProfiles)
     .orderBy(desc(conceptProfiles.createdAt));
+
+  // Kemajuan analisis diambil dari job-nya, bukan ditebak.
+  //
+  // Agent memang melaporkan angka sebenarnya di sepanjang jalan — 10-60 saat
+  // mengunduh contoh, 65 saat membaca gaya, 95 saat mengirim profil. Sebelum
+  // ini angka itu tidak pernah sampai ke halaman ini, dan yang terlihat cuma
+  // lencana "menganalisis" yang diam selama beberapa menit: tidak ada bedanya
+  // antara sedang berjalan dan tersangkut.
+  //
+  // Ditanyakan HANYA untuk konsep yang belum siap. Konsep yang sudah selesai
+  // tidak punya kemajuan untuk ditampilkan, dan menariknya untuk semua baris
+  // berarti membaca job untuk seluruh pustaka setiap kali halaman dibuka.
+  const belum = rows.filter((r) => !r.siap).map((r) => r.id);
+  const kemajuan = new Map<string, { progress: number; tahap: string }>();
+  if (belum.length) {
+    const jr = await db
+      .select({
+        conceptId: jobs.conceptId,
+        progress: jobs.progress,
+        tahap: jobs.tahap,
+        createdAt: jobs.createdAt,
+      })
+      .from(jobs)
+      .where(and(eq(jobs.tipe, "profile_extraction"), inArray(jobs.conceptId, belum)))
+      .orderBy(desc(jobs.createdAt));
+    // Yang TERBARU per konsep yang menang: job yang diulang melahirkan baris
+    // baru, dan yang lama berhenti di angka tempat ia gagal.
+    for (const j of jr) {
+      if (j.conceptId && !kemajuan.has(j.conceptId)) {
+        kemajuan.set(j.conceptId, { progress: j.progress, tahap: j.tahap });
+      }
+    }
+  }
 
   return (
     <>
@@ -98,10 +132,21 @@ export default async function ConceptsPage() {
                   )}
                 </p>
 
+                {/* Bilah hanya untuk konsep yang MASIH dianalisis. Bilah penuh
+                    pada konsep yang sudah selesai tidak mengabarkan apa pun,
+                    dan cuma menambah satu garis di tiap kartu. */}
+                {!c.siap && (
+                  <Progress value={kemajuan.get(c.id)?.progress ?? 0} type="success" />
+                )}
+
                 <div className="konsep-kaki">
                   <div className="konsep-label">
                     {c.isDefault && <span className="tag done">default</span>}
-                    {!c.siap && <span className="tag pending">menganalisis</span>}
+                    {!c.siap && (
+                      <span className="tag pending">
+                        {kemajuan.get(c.id)?.tahap || "menganalisis"}
+                      </span>
+                    )}
                     {c.arsip && <span className="tag pending">diarsipkan</span>}
                   </div>
                   <HapusKonsep

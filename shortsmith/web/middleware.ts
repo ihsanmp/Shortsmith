@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { COOKIE_NAME, verifySessionToken } from "@/lib/session";
+import { bolehDilihatTamu } from "@/lib/tamu";
 
 /**
  * Gerbang tunggal untuk seluruh sisi browser.
@@ -71,13 +72,8 @@ export async function middleware(request: NextRequest) {
       // otomatis terbuka untuk tamu sampai seseorang ingat menambahkannya —
       // dengan daftar izin, ia tertutup sampai seseorang memutuskan sebaliknya.
       // Untuk batas yang menjaga rekaman pribadi, arah gagalnya harus tertutup.
-      const bolehLihat =
-        pathname === "/" ||
-        pathname === "/about" ||
-        pathname === "/profile" ||
-        pathname === "/api/sesi";
-
-      if (!bolehLihat) {
+      // Daftarnya hidup di `lib/tamu.ts` karena navbar harus membacanya juga.
+      if (!bolehDilihatTamu(pathname)) {
         if (pathname.startsWith("/api/")) {
           return NextResponse.json(
             { error: "Mode tamu tidak bisa membuka bagian ini. Masuk dengan akun." },

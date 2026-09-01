@@ -37,6 +37,7 @@ export async function GET(_request: Request, { params }: Params) {
         createdAt: projects.createdAt,
         conceptId: projects.conceptId,
         conceptNama: conceptProfiles.nama,
+        konsepNama: projects.konsepNama,
       })
       .from(projects)
       .leftJoin(conceptProfiles, eq(projects.conceptId, conceptProfiles.id))

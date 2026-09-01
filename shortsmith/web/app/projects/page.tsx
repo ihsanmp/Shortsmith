@@ -33,6 +33,9 @@ export default async function DaftarProject() {
       status: projects.status,
       createdAt: projects.createdAt,
       conceptNama: conceptProfiles.nama,
+      // Salinan nama saat project dibuat. Dipakai kalau konsepnya sudah
+      // dihapus -- lihat kolom `konsepNama` di db/schema.ts.
+      konsepNama: projects.konsepNama,
     })
     .from(projects)
     .leftJoin(conceptProfiles, eq(projects.conceptId, conceptProfiles.id))
@@ -120,7 +123,12 @@ export default async function DaftarProject() {
 
                 <div className="kartu-tengah">
                   <h3 className="kartu-judul">{p.judul}</h3>
-                  <p className="kartu-konsep">{p.conceptNama ?? "konsep terhapus"}</p>
+                  {/* Nama dari tabel konsep dulu, salinan milik project sebagai cadangan.
+                      "konsep terhapus" cuma untuk project lama yang dibuat
+                      sebelum salinannya ada. */}
+                  <p className="kartu-konsep">
+                    {p.conceptNama ?? p.konsepNama ?? "konsep terhapus"}
+                  </p>
                 </div>
 
                 <div className="kartu-progress">

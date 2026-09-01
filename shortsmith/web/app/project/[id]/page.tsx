@@ -12,7 +12,13 @@ import { galatDari } from "@/lib/galat";
 type Status = "pending" | "processing" | "done" | "failed";
 
 type Data = {
-  project: { judul: string; brief: string; status: Status; conceptNama: string | null };
+  project: {
+    judul: string;
+    brief: string;
+    status: Status;
+    conceptNama: string | null;
+    konsepNama: string | null;
+  };
   job: {
     id: string;
     status: Status;
@@ -131,7 +137,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <h1 className="title" style={{ fontSize: "2rem" }}>
             {project.judul}
           </h1>
-          <span className="hint">Konsep: {project.conceptNama ?? "-"}</span>
+          <span className="hint">
+            Konsep: {project.conceptNama ?? project.konsepNama ?? "-"}
+          </span>
         </div>
       </div>
 

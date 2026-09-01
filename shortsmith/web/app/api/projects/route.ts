@@ -91,6 +91,7 @@ export async function GET() {
       brief: projects.brief,
       createdAt: projects.createdAt,
       conceptNama: conceptProfiles.nama,
+      konsepNama: projects.konsepNama,
     })
     .from(projects)
     .leftJoin(conceptProfiles, eq(projects.conceptId, conceptProfiles.id))

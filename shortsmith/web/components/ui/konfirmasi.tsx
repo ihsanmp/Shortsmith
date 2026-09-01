@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Dialog konfirmasi untuk tindakan yang tidak bisa dibatalkan.
@@ -18,6 +19,22 @@ import { useEffect, useRef } from "react";
  * - **Fokus dikembalikan** ke tombol yang membuka dialog setelah ditutup,
  *   supaya pengguna keyboard tidak terlempar ke awal halaman.
  * - **Scroll halaman dikunci** selama dialog terbuka.
+ *
+ * ## Kenapa dirender lewat portal ke <body>
+ *
+ * `position: fixed` TIDAK relatif terhadap viewport kalau ada leluhur yang
+ * punya `transform` — ia jadi relatif terhadap leluhur itu. Aturan CSS yang
+ * mudah dilupakan, dan akibatnya terlihat jelas.
+ *
+ * Terjadi sungguhan: tombol Hapus konsep berada di dalam kartu, dan kartu itu
+ * punya `transform: translateY(-2px)` saat hover. Selama kursor masih di atas
+ * kartu — yaitu tepat setelah tombolnya diklik — dialognya berhenti jadi modal
+ * dan menyusut jadi kotak sempit di dalam kartu, lengkap dengan latar gelap
+ * yang cuma menutupi kartu itu.
+ *
+ * Portal memindahkannya ke <body>, di luar jangkauan transform mana pun. Ini
+ * bukan kerapian: selama dialog ini dipakai di dalam kartu yang bisa bergerak,
+ * `fixed` saja memang tidak cukup.
  */
 export function Konfirmasi({
   terbuka,
@@ -40,6 +57,11 @@ export function Konfirmasi({
 }) {
   const batalRef = useRef<HTMLButtonElement>(null);
   const pemicuRef = useRef<Element | null>(null);
+  // Portal butuh `document`, yang tidak ada saat render di server. Dipasang
+  // setelah komponen menempel, jadi render pertama di server tetap kosong —
+  // dan itu benar: dialog tertutup memang tidak menghasilkan apa-apa.
+  const [menempel, setMenempel] = useState(false);
+  useEffect(() => setMenempel(true), []);
 
   useEffect(() => {
     if (!terbuka) return;
@@ -62,9 +84,9 @@ export function Konfirmasi({
     };
   }, [terbuka, busy, onBatal]);
 
-  if (!terbuka) return null;
+  if (!terbuka || !menempel) return null;
 
-  return (
+  return createPortal(
     <div
       className="modal-latar"
       onClick={() => !busy && onBatal()}
@@ -106,6 +128,7 @@ export function Konfirmasi({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

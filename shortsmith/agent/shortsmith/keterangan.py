@@ -16,6 +16,14 @@ Yang dikirim ke model hanya ucapan di dalam KLIP INI — sekitar 200-400 kata,
 bukan transkrip rekaman satu jam. Satu panggilan per klip berbiaya sekitar
 seperlima puluh panggilan pemilih potongan.
 
+## Kenapa pendek
+
+Tujuannya TikTok. Di sana keterangan dipotong setelah kira-kira satu baris, dan
+sisanya bersembunyi di balik "more" yang jarang diketuk — jadi kalimat kedua dan
+ketiga bukan hanya tidak menambah, mereka mendorong tagar keluar dari pandangan.
+Batasnya di sini soal apa yang TERBACA, bukan apa yang diterima platform
+(TikTok sendiri menampung 2200 karakter).
+
 ## Kenapa gagalnya tidak menjatuhkan apa pun
 
 Videonya sudah jadi dan sudah bernilai saat fungsi ini dipanggil. Keterangan
@@ -41,6 +49,10 @@ BATAS_DETIK = 120
 # ini menampung yang panjang tanpa membiarkan satu klip aneh mengirim ribuan.
 MAKS_KATA = 600
 
+# Panjang maksimal kait + isi, di luar tagar. Kira-kira sepanjang yang terlihat
+# di TikTok sebelum terpotong.
+MAKS_KARAKTER = 150
+
 
 class KeteranganError(RuntimeError):
     pass
@@ -56,10 +68,14 @@ def _prompt(ucapan: str, jenis: str, topik: str) -> str:
         "",
         "Aturan:",
         "- Tulis dalam BAHASA YANG SAMA dengan ucapannya.",
-        "- Baris pertama adalah pembuka: satu kalimat yang membuat orang "
-        "berhenti scroll. Bukan judul, bukan rangkuman.",
-        "- Lalu 1-2 kalimat yang menyebut isi videonya secara konkret. Sebut "
-        "hal yang benar-benar dikatakan, bukan janji umum.",
+        "- PENDEK. Ini untuk TikTok: yang terbaca sebelum terpotong cuma "
+        "sekitar satu baris.",
+        '- "kait" adalah pembuka yang membuat orang berhenti scroll. Satu '
+        "kalimat, MAKSIMAL 12 KATA. Bukan judul, bukan rangkuman.",
+        '- "isi" paling banyak SATU kalimat pendek yang menyebut isi videonya '
+        "secara konkret. Kosongkan saja kalau kaitnya sudah cukup — itu "
+        "pilihan yang baik, bukan kemalasan.",
+        f"- kait + isi digabung HARUS di bawah {MAKS_KARAKTER} karakter.",
         "- JANGAN mengarang angka, nama, atau klaim yang tidak ada di ucapan.",
         "- Tagar 3-5 buah, relevan, huruf kecil, tanpa spasi di dalamnya.",
         "- Tanpa emoji berlebihan; paling banyak dua, dan hanya kalau menambah.",
@@ -83,8 +99,8 @@ def _prompt(ucapan: str, jenis: str, topik: str) -> str:
         "UCAPAN DI VIDEO:",
         ucapan,
         "",
-        'Balas HANYA JSON: {"keterangan": "...", "tagar": ["...", "..."]}',
-        "Keterangan boleh memuat baris baru; tagar TANPA tanda pagar.",
+        'Balas HANYA JSON: {"kait": "...", "isi": "...", "tagar": ["...", "..."]}',
+        '"isi" boleh string kosong; tagar TANPA tanda pagar.',
     ]
     return "\n".join(bagian)
 
@@ -129,17 +145,36 @@ def tulis(ucapan: str, *, jenis: str = "short", topik: str = "") -> str:
             raise KeteranganError(f"keluaran tidak mengandung JSON: {teks[:160]}")
 
         data = json.loads(teks[awal : akhir + 1])
-        isi = str(data.get("keterangan") or "").strip()
-        if not isi:
+        # `keterangan` adalah bentuk lama, saat kait dan isi masih satu string.
+        kait = str(data.get("kait") or data.get("keterangan") or "").strip()
+        isi = str(data.get("isi") or "").strip()
+        if not kait:
             raise KeteranganError("keterangan kosong")
+
+        # Kait dan isi dipisah justru supaya batasnya bisa ditegakkan tanpa
+        # memotong kalimat di tengah: yang dibuang adalah isi UTUH, bukan
+        # ekornya. Keterangan yang berhenti di "...yang bikin dia" lebih buruk
+        # daripada keterangan yang hanya berisi kaitnya.
+        if isi and len(kait) + 1 + len(isi) > MAKS_KARAKTER:
+            log.info(
+                "keterangan %d karakter, di atas batas %d - isi dilepas, kait dipertahankan",
+                len(kait) + 1 + len(isi),
+                MAKS_KARAKTER,
+            )
+            isi = ""
 
         tagar = [
             "#" + str(t).strip().lstrip("#").replace(" ", "")
             for t in (data.get("tagar") or [])
             if str(t).strip()
         ]
-        hasil = isi if not tagar else f"{isi}\n\n{' '.join(tagar[:5])}"
-        log.info("keterangan ditulis: %d karakter, %d tagar", len(hasil), len(tagar[:5]))
+        teks_saja = kait if not isi else kait + "\n" + isi
+        hasil = teks_saja if not tagar else teks_saja + "\n\n" + " ".join(tagar[:5])
+        log.info(
+            "keterangan ditulis: %d karakter teks, %d tagar",
+            len(teks_saja),
+            len(tagar[:5]),
+        )
         return hasil
     except Exception as exc:  # noqa: BLE001
         log.warning("keterangan gagal ditulis (%s) — dilewati", exc)

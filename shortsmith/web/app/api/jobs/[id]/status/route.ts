@@ -27,6 +27,8 @@ const Body = z.object({
   namaFile: z.string().max(255).optional(),
   ukuranBytes: z.number().int().positive().optional(),
   durasi: z.number().positive().optional(),
+  /** Teks unggahan untuk klip utama. Lihat kolom `keterangan` di db/schema.ts. */
+  keterangan: z.string().max(4000).optional(),
   /**
    * Klip TAMBAHAN, kalau job ini menghasilkan lebih dari satu.
    *
@@ -42,6 +44,7 @@ const Body = z.object({
         namaFile: z.string().max(255).optional(),
         ukuranBytes: z.number().int().positive().optional(),
         durasi: z.number().positive().optional(),
+        keterangan: z.string().max(4000).optional(),
       }),
     )
     .max(8)
@@ -81,6 +84,7 @@ export async function POST(request: Request, { params }: Params) {
           namaFile: body.namaFile,
           ukuranBytes: body.ukuranBytes,
           durasi: body.durasi,
+          keterangan: body.keterangan,
         },
         ...(body.klipTambahan ?? []),
       ];
@@ -93,6 +97,7 @@ export async function POST(request: Request, { params }: Params) {
           namaFile: k.namaFile || (k.outputKey.split("/").pop() ?? "output.mp4"),
           ukuranBytes: k.ukuranBytes,
           durasi: k.durasi != null ? String(k.durasi) : null,
+          keterangan: k.keterangan ?? null,
         })),
       );
     }

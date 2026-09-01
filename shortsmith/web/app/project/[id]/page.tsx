@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Keterangan } from "@/components/ui/keterangan";
 import { Konfirmasi } from "@/components/ui/konfirmasi";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
@@ -31,7 +32,13 @@ type Data = {
    * memuatnya -- yang terjadi kalau halaman dimuat dari cache sementara server
    * sudah diperbarui, atau sebaliknya.
    */
-  semuaOutput?: { url: string; namaFile: string; ukuranBytes: number | null; durasi: number | null }[];
+  semuaOutput?: {
+    url: string;
+    namaFile: string;
+    ukuranBytes: number | null;
+    durasi: number | null;
+    keterangan: string | null;
+  }[];
 };
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -94,6 +101,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     namaFile: string;
     ukuranBytes: number | null;
     durasi?: number | null;
+    keterangan?: string | null;
   };
   const klip: Klip[] = data.semuaOutput?.length
     ? data.semuaOutput
@@ -198,6 +206,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   <span className="hint">{(k.ukuranBytes / 1e6).toFixed(1)} MB</span>
                 )}
               </div>
+              {/* Keterangan unggahan ditaruh DI BAWAH videonya, bukan di panel
+                  terpisah: keduanya dipakai bersamaan saat mengunggah, dan
+                  memisahkannya berarti menyalin sambil menggulir bolak-balik.
+                  Klip yang keteranganya gagal ditulis tidak menampilkan apa
+                  pun — tidak ada yang perlu dijelaskan tentang ketiadaannya. */}
+              {k.keterangan && <Keterangan teks={k.keterangan} />}
             </div>
           ))}
         </div>

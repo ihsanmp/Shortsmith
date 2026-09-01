@@ -659,12 +659,25 @@ class Daemon:
             slot = self.api.slot_output(job["id"])
         self.api.upload(k, slot["uploadUrl"])
         info = probe(k)
-        return {
+        ringkas = {
             "outputKey": slot["key"],
             "namaFile": k.name,
             "ukuranBytes": k.stat().st_size,
             "durasi": round(info.durasi, 3),
         }
+
+        # Keterangan unggahan ditulis pipeline berdampingan dengan videonya.
+        # Tidak ada berarti gagal ditulis atau klipnya terlalu pendek — bukan
+        # kegagalan, dan tidak perlu disebut.
+        sisi = k.with_suffix(".txt")
+        if sisi.exists():
+            try:
+                isi = sisi.read_text(encoding="utf-8").strip()
+                if isi:
+                    ringkas["keterangan"] = isi[:4000]
+            except OSError as exc:
+                log.warning("keterangan %s tidak terbaca: %s", sisi.name, exc)
+        return ringkas
 
     def _simpan_hasil(self, berkas: Path, job: dict[str, Any]) -> Path | None:
         """Salin hasil render ke folder hasil dengan nama yang bisa dibaca.

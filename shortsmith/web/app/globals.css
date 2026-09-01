@@ -4294,6 +4294,63 @@ body:has(.hero) {
 }
 
 /* ==========================================================================
+   Keterangan unggahan
+
+   Ditaruh menempel di bawah videonya. Monospace TIDAK dipakai: yang dibaca di
+   sini kalimat untuk manusia, dan monospace membuatnya terbaca seperti keluaran
+   program yang tidak boleh disentuh — padahal kotak ini memang untuk disunting.
+   ========================================================================== */
+
+.keterangan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+
+.keterangan-atas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.keterangan-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+}
+
+.keterangan-salin {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  min-height: 32px;
+}
+
+.keterangan-teks {
+  width: 100%;
+  resize: vertical;
+  min-height: 88px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.keterangan-teks:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* ==========================================================================
    Pilihan topik di tengah proses
 
    Lebarnya jauh lebih besar daripada bilah progres yang ia gantikan: yang

@@ -74,6 +74,7 @@ export async function GET(_request: Request, { params }: Params) {
       namaFile: o.namaFile,
       ukuranBytes: o.ukuranBytes,
       durasi: o.durasi != null ? Number(o.durasi) : null,
+      keterangan: o.keterangan,
     })),
   );
   const output = keluaran[0];

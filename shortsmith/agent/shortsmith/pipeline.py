@@ -833,6 +833,24 @@ def run(
 
     laporkan(hasil, edl)
 
+    # Keterangan unggahan ditulis dari ucapan DI DALAM klip ini.
+    #
+    # Ditaruh berdampingan dengan videonya sebagai berkas .txt, bukan di
+    # hasil.json: hasil.json satu per job, sementara satu job bisa menghasilkan
+    # lima klip yang keterangannya berbeda-beda. Berkas berdampingan mengikat
+    # tiap keterangan ke klipnya tanpa perlu aturan penamaan tambahan.
+    from .keterangan import tulis as tulis_keterangan
+
+    ucapan = " ".join(
+        seg.text.strip()
+        for c in plan.cuts
+        for seg in vmap.videos[0].segments
+        if seg.start >= c.in_ - 0.5 and seg.end <= c.out + 0.5 and seg.text.strip()
+    )
+    ket = tulis_keterangan(ucapan, jenis=jenis, topik=brief or profile.manual.fokus)
+    if ket:
+        hasil.with_suffix(".txt").write_text(ket, encoding="utf-8")
+
     ringkasan = {
         "job_id": job_id,
         "sources": [str(x) for x in paths],

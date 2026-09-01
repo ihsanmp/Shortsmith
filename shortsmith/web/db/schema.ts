@@ -195,6 +195,15 @@ export const assets = pgTable(
       onDelete: "cascade",
     }),
     jenis: assetKind("jenis").notNull(),
+
+    // Teks yang ditempel saat mengunggah klip ini: pembuka, ringkas isinya,
+    // tagar. Ditulis agent dari ucapan di dalam klipnya sendiri.
+    //
+    // Namanya BUKAN "caption" dengan sengaja: di aplikasi ini caption sudah
+    // berarti subtitle yang dibakar ke gambar (lihat CaptionStyle), dan dua hal
+    // berbeda dengan satu nama adalah cara paling mudah menyalakan bug yang
+    // tidak terlihat.
+    keterangan: text("keterangan"),
     /**
      * Urutan file di dalam satu project. Ini DATA, bukan efek samping urutan
      * insert — dan itu perbedaan yang mahal.

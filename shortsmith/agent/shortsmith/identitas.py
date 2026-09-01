@@ -114,6 +114,17 @@ _DAFTAR: tuple[Identitas, ...] = (
         ),
     ),
     Identitas(
+        nama="penulis",
+        model=SONNET,
+        tugas=(
+            "Menulis keterangan unggahan untuk klip yang sudah jadi: kalimat "
+            "pembuka, ringkas isinya, dan tagar. Yang dikirim hanya ucapan di "
+            "dalam klip itu -- sekitar 200-400 kata -- jadi murah meski "
+            "modelnya bukan yang terkecil. Menulis untuk manusia adalah tempat "
+            "model kecil paling terdengar kaku."
+        ),
+    ),
+    Identitas(
         nama="pelabel",
         model=HAIKU,
         tugas=(

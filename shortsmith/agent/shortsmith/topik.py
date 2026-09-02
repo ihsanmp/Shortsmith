@@ -38,7 +38,7 @@ import shutil
 import subprocess
 
 from .identitas import model_untuk, sebab_gagal
-from .models import ConceptProfile, ProjectMap
+from .models import Arahan, ConceptProfile, ProjectMap
 
 log = logging.getLogger(__name__)
 
@@ -75,13 +75,22 @@ def jumlah_klip(durasi_detik: float) -> int:
     return max(MIN_KLIP, min(MAKS_KLIP, n))
 
 
-def boleh_dipecah(jenis: str, brief: str) -> bool:
+def boleh_dipecah(jenis: str, brief: str, arahan: Arahan | None = None) -> bool:
     """Apakah job ini menghasilkan beberapa klip, bukan satu.
 
     Brief yang diisi SELALU menang. Pengguna yang menuliskan topiknya sudah
     memilih, dan memberinya empat video yang tiga di antaranya membahas hal lain
     adalah mengabaikan permintaannya.
+
+    Arahan yang diisi menang dengan alasan yang sama, dan lebih kuat. Pencarian
+    topik ada untuk mengisi kekosongan ketika pengguna tidak menyatakan videonya
+    tentang apa; empat komponen arahan ADALAH pernyataan itu. Menawarkan daftar
+    topik di atasnya berarti menanyakan sesuatu yang barusan dijawab — dan
+    memecahnya jadi beberapa klip berarti membuat tiga video yang tidak diminta,
+    masing-masing membawa narasi wajib yang sama.
     """
+    if arahan is not None and arahan.terisi():
+        return False
     return jenis in JENIS_BOLEH and not brief.strip()
 
 

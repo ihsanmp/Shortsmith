@@ -66,6 +66,59 @@ class ManualFields(BaseModel):
     fokus: str = ""
 
 
+class Arahan(BaseModel):
+    """Empat komponen brief yang WAJIB terpenuhi kalau diisi.
+
+    ## Bedanya dengan `ManualFields`, yang justru dulu dibuang
+
+    ManualFields pernah punya lima isian — gaya bahasa, brand voice, call to
+    action, target audiens, larangan — dan semuanya dibuang karena pengaruhnya
+    kecil sementara ongkosnya dibayar penuh: WAJIB diisi, di SETIAP konsep baru,
+    untuk sesuatu yang berakhir sebagai beberapa baris lunak di prompt.
+
+    Yang di sini berbeda pada ketiga hal itu, dan perbedaannya yang membuatnya
+    sepadan:
+
+      - Opsional. Kosong adalah keadaan biasa, dan seluruh alur lama berjalan
+        persis seperti sebelumnya.
+      - Per KLIP, bukan per konsep. Narasi dan tujuan campaign berubah tiap
+        video; menguncinya di konsep akan memaksa semua video menyampaikan
+        pesan yang sama.
+      - Mengikat. Kalau diisi, hasilnya harus memuatnya — bukan
+        mempertimbangkannya.
+
+    ## Kenapa ia menggantikan pemilihan topik
+
+    Keduanya menjawab pertanyaan yang sama: video ini tentang apa. Pencarian
+    topik ada untuk mengisi kekosongan ketika pengguna tidak menyatakannya.
+    Empat komponen ini adalah pernyataan itu, dan lebih tegas daripada satu
+    baris topik — jadi masih menawarkan daftar topik untuk dipilih berarti
+    menanyakan sesuatu yang barusan dijawab.
+    """
+
+    #: Yang HARUS sampai ke penonton. Bukan tema, melainkan isi pesannya.
+    narasi: str = ""
+    #: Perasaan yang ditinggalkan videonya.
+    kesan: str = ""
+    #: Untuk apa video ini dibuat.
+    tujuan: str = ""
+    #: Ajakan di akhir video.
+    cta: str = ""
+
+    def terisi(self) -> bool:
+        return any(x.strip() for x in (self.narasi, self.kesan, self.tujuan, self.cta))
+
+    def butir(self) -> list[tuple[str, str]]:
+        """Komponen yang benar-benar diisi, dengan labelnya."""
+        pasang = (
+            ("Narasi yang wajib sampai", self.narasi),
+            ("Kesan yang diinginkan", self.kesan),
+            ("Tujuan campaign", self.tujuan),
+            ("CTA di akhir video", self.cta),
+        )
+        return [(label, nilai.strip()) for label, nilai in pasang if nilai.strip()]
+
+
 class ConceptProfile(BaseModel):
     nama: str
     versi: int = 1

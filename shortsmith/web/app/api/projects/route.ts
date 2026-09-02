@@ -19,10 +19,31 @@ const MAKS_MENTAH = 10;
  * Yang kedua tidak pernah menimpa konsep lama. Tiap kali kamu mengirim video
  * contoh, lahir konsep baru; yang lama tetap utuh dan tetap bisa dipilih.
  */
+type Arahan = { narasi: string; kesan: string; tujuan: string; cta: string };
+
+function arahanTerisi(a: Arahan | undefined): a is Arahan {
+  return !!a && [a.narasi, a.kesan, a.tujuan, a.cta].some((x) => x.trim().length > 0);
+}
+
 const CreateBody = z
   .object({
     judul: z.string().max(200).default("Tanpa judul"),
     brief: z.string().max(4000).default(""),
+    /**
+     * Empat komponen brief yang WAJIB terpenuhi kalau diisi.
+     *
+     * Seluruhnya opsional, dan objeknya sendiri boleh tidak ada — form versi
+     * lama tidak mengirimnya, dan menolak permintaan karena kunci baru yang
+     * tidak ada berarti memutus klien yang belum sempat ikut berubah.
+     */
+    arahan: z
+      .object({
+        narasi: z.string().max(2000).default(""),
+        kesan: z.string().max(2000).default(""),
+        tujuan: z.string().max(2000).default(""),
+        cta: z.string().max(2000).default(""),
+      })
+      .optional(),
     // Jenis video yang dituju. Menentukan rasio, durasi target, dan subtitle.
     jenis: z.enum(["short", "cinematic", "podcast"]).default("short"),
     // Rasio keluaran pilihan pengguna. "auto" = serahkan pada jenis dan konsep.
@@ -207,6 +228,10 @@ export async function POST(request: Request) {
       profilJson: salinanProfil,
       konsepNama: salinanNama,
       brief: body.brief,
+      // Yang kosong seluruhnya disimpan sebagai NULL, bukan sebagai objek
+      // berisi empat string kosong. Keduanya berarti "tidak diisi", dan yang
+      // kedua memaksa setiap pembacanya memeriksa isi tiap field untuk tahu.
+      arahan: arahanTerisi(body.arahan) ? body.arahan : null,
       jenis: body.jenis,
       rasio: body.rasio,
     })

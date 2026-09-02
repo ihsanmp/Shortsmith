@@ -134,6 +134,9 @@ async function buildRenderPayload(job: {
     projectId: job.project_id,
     conceptId: job.concept_id,
     brief: project?.brief ?? "",
+    // Empat komponen brief. null kalau tidak diisi — agent memperlakukan
+    // ketiadaannya sama dengan kosong, jadi bentuk mana pun aman.
+    arahan: project?.arahan ?? null,
     judul: project?.judul ?? "",
     // Salinan milik project MENANG atas konsepnya.
     //

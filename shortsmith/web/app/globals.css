@@ -4812,3 +4812,61 @@ body:has(.hero) {
 .nav-kosong {
   min-height: 44px;
 }
+
+/* ---------- Komponen wajib (arahan) ---------- */
+
+/* Dibingkai, bukan dibiarkan menyatu dengan isian lain di sekitarnya.
+   Keempatnya MENGIKAT hasil, dan isian yang terlihat sama seperti "Fokus
+   pembahasan" di atasnya akan diperlakukan sama ringannya. Bingkainya yang
+   menyatakan perbedaan itu sebelum ada yang mengetik. */
+.arahan-grup {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px;
+  background: var(--surface-2);
+  display: grid;
+  gap: var(--sp-4, 16px);
+}
+
+.arahan-kepala {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.arahan-judul {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* Muncul hanya setelah ada yang diisi: sebelum itu tidak ada yang mengikat,
+   dan lencana yang selalu menyala berhenti berarti apa-apa. */
+.arahan-tanda {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--accent);
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+.arahan-daftar {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.arahan-daftar dt {
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.arahan-daftar dd {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}

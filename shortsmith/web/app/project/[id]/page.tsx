@@ -15,6 +15,12 @@ type Data = {
   project: {
     judul: string;
     brief: string;
+    arahan: {
+      narasi?: string;
+      kesan?: string;
+      tujuan?: string;
+      cta?: string;
+    } | null;
     status: Status;
     conceptNama: string | null;
     konsepNama: string | null;
@@ -82,6 +88,17 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   }
 
   const { project, job, output } = data;
+
+  // Hanya komponen yang benar-benar diisi. Label kosong berdampingan dengan
+  // yang terisi terbaca seperti sesuatu yang gagal dimuat.
+  const arahanButir: [string, string][] = (
+    [
+      ["Narasi yang wajib sampai", project.arahan?.narasi],
+      ["Kesan yang diinginkan", project.arahan?.kesan],
+      ["Tujuan campaign", project.arahan?.tujuan],
+      ["CTA di akhir video", project.arahan?.cta],
+    ] as [string, string | undefined][]
+  ).flatMap(([label, nilai]) => (nilai?.trim() ? [[label, nilai.trim()] as [string, string]] : []));
   // Jatuh kembali ke `output` tunggal kalau daftar belum ada.
   //
   // Tipenya dinyatakan eksplisit, bukan disimpulkan dari gabungan dua bentuk:
@@ -221,6 +238,24 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <p style={{ fontSize: "0.9rem", color: "var(--ink-3)", marginTop: 8 }}>
             {project.brief}
           </p>
+        </div>
+      )}
+
+      {/* Ditampilkan supaya hasilnya bisa DINILAI terhadap yang diminta.
+          Tanpa ini, satu-satunya tempat keempat komponen itu pernah terlihat
+          adalah form yang sudah ditinggalkan, dan menilai apakah videonya
+          memenuhi narasi wajibnya jadi bersandar pada ingatan. */}
+      {arahanButir.length > 0 && (
+        <div className="panel">
+          <h2 className="section">Komponen wajib</h2>
+          <dl className="arahan-daftar">
+            {arahanButir.map(([label, nilai]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{nilai}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       )}
 

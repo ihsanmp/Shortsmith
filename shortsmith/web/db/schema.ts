@@ -157,6 +157,26 @@ export const projects = pgTable(
     konsepNama: text("konsep_nama"),
 
     brief: text("brief").notNull().default(""),
+
+    /**
+     * Empat komponen brief yang wajib terpenuhi kalau diisi: narasi, kesan,
+     * tujuan campaign, dan CTA. Lihat `Arahan` di agent/shortsmith/models.py.
+     *
+     * Satu kolom jsonb, bukan empat kolom text. Keempatnya selalu diisi,
+     * dibaca, dan dikirim bersama sebagai satu formulir — tidak ada satu pun
+     * kueri yang menanyakan salah satunya sendirian. Empat kolom berarti empat
+     * migrasi untuk satu gagasan.
+     *
+     * NULL berarti tidak diisi, dan itu keadaan biasa: seluruh alur lama
+     * (pencarian topik, pilihan topik) berjalan persis seperti sebelumnya.
+     */
+    arahan: jsonb("arahan").$type<{
+      narasi?: string;
+      kesan?: string;
+      tujuan?: string;
+      cta?: string;
+    }>(),
+
     jenis: videoJenis("jenis").notNull().default("short"),
     /**
      * Rasio keluaran yang DIPILIH pengguna, atau "auto".

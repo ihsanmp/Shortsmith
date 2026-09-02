@@ -28,7 +28,7 @@ from typing import Any
 from .api import ApiClient, ApiError
 from .config import SETTINGS
 from .jenis import gain_musik, terapkan_jenis
-from .models import CaptionStyle, ConceptProfile, ManualFields
+from .models import Arahan, CaptionStyle, ConceptProfile, ManualFields
 from .probe import probe
 
 log = logging.getLogger(__name__)
@@ -137,6 +137,31 @@ def _profile_from_json(data: dict[str, Any] | None, nama: str = "konsep") -> Con
     if not data:
         return ConceptProfile(nama=nama)
     return ConceptProfile.model_validate(data)
+
+
+def _arahan_dari(job: dict[str, Any]) -> Arahan:
+    """Baca empat komponen brief dari muatan job.
+
+    Muatannya datang dari jaringan, jadi bentuknya tidak dijamin: server versi
+    lama tidak mengirim kunci ini sama sekali, dan `null` sah sebagai jawaban
+    "tidak diisi". Keduanya berarti hal yang sama di sini — arahan kosong, dan
+    seluruh alur lama berjalan seperti sebelumnya.
+
+    Bentuk yang salah TIDAK menggagalkan job. Yang hilang cuma arahannya, dan
+    itu jauh lebih murah daripada job yang menolak berjalan karena satu kunci
+    tambahan berbentuk lain dari yang diduga.
+    """
+    mentah = job.get("arahan")
+    if not isinstance(mentah, dict):
+        return Arahan()
+    try:
+        a = Arahan.model_validate(mentah)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("arahan tidak terbaca (%s) — dilewati", exc)
+        return Arahan()
+    if a.terisi():
+        log.info("arahan pengguna: %s", ", ".join(label for label, _ in a.butir()))
+    return a
 
 
 class Daemon:
@@ -473,6 +498,7 @@ class Daemon:
                 output,
                 jenis=jenis,
                 brief=job.get("brief", ""),
+                arahan=_arahan_dari(job),
                 job_id=job["id"],
                 music=musik,
                 music_gain_db=gain_musik(jenis),

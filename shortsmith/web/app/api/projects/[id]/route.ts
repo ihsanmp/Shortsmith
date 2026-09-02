@@ -33,6 +33,7 @@ export async function GET(_request: Request, { params }: Params) {
         id: projects.id,
         judul: projects.judul,
         brief: projects.brief,
+        arahan: projects.arahan,
         status: projects.status,
         createdAt: projects.createdAt,
         conceptId: projects.conceptId,

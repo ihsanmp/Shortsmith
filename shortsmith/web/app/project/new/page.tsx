@@ -95,6 +95,10 @@ export default function NewProjectPage() {
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [conceptId, setConceptId] = useState("");
   const [brief, setBrief] = useState("");
+  // Empat komponen brief. Satu objek, bukan empat state: mereka selalu dibaca,
+  // dikirim, dan dinilai "terisi atau tidak" bersama-sama.
+  const [arahan, setArahan] = useState({ narasi: "", kesan: "", tujuan: "", cta: "" });
+  const arahanTerisi = Object.values(arahan).some((v) => v.trim());
 
 
   // Sengaja DUA kolom terpisah, bukan satu kolom multi-file. Browser
@@ -390,6 +394,7 @@ export default function NewProjectPage() {
           // kolom judul yang bisa dipakai pengguna untuk memperbaikinya sendiri.
           judul: daftarBahan[0].nama.slice(0, 200),
           brief,
+          arahan,
           jenis,
           rasio: rasioOut,
           musik,
@@ -772,6 +777,67 @@ export default function NewProjectPage() {
             Diisi &mdash; hanya bagian rekaman yang membahas topik ini yang dipakai.
             Dikosongkan &mdash; bebas, editor memilih topik terkuat yang ada di video.
           </p>
+        </div>
+
+        {/* Empat komponen brief.
+            Dikelompokkan dalam satu blok bertanda, bukan disebar sebagai empat
+            isian biasa: keempatnya satu gagasan, dan yang membedakannya dari
+            "Fokus pembahasan" di atas adalah sifatnya MENGIKAT. Isian yang
+            terlihat sama akan diperlakukan sama. */}
+        <div className="arahan-grup">
+          <div className="arahan-kepala">
+            <span className="arahan-judul">Komponen wajib (opsional)</span>
+            {arahanTerisi && <span className="arahan-tanda">mengikat</span>}
+          </div>
+          <p className="hint" style={{ marginTop: 0, marginBottom: 12 }}>
+            Kalau diisi, hasilnya <strong>harus</strong> memenuhinya &mdash; dan
+            pemilihan topik dilewati, karena keempatnya sudah menjawab video ini
+            tentang apa.
+          </p>
+
+          <div>
+            <label htmlFor="ar-narasi">Narasi yang wajib sampai</label>
+            <textarea
+              id="ar-narasi"
+              value={arahan.narasi}
+              disabled={busy}
+              placeholder="mis. modal kecil bukan alasan untuk tidak mulai"
+              onChange={(e) => setArahan((a) => ({ ...a, narasi: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="ar-kesan">Kesan yang diinginkan</label>
+            <textarea
+              id="ar-kesan"
+              value={arahan.kesan}
+              disabled={busy}
+              placeholder="mis. tenang dan meyakinkan, bukan menggurui"
+              onChange={(e) => setArahan((a) => ({ ...a, kesan: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="ar-tujuan">Tujuan campaign</label>
+            <textarea
+              id="ar-tujuan"
+              value={arahan.tujuan}
+              disabled={busy}
+              placeholder="mis. menaikkan pendaftaran kelas batch 3"
+              onChange={(e) => setArahan((a) => ({ ...a, tujuan: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="ar-cta">CTA di akhir video</label>
+            <textarea
+              id="ar-cta"
+              value={arahan.cta}
+              disabled={busy}
+              placeholder="mis. cek link di bio untuk daftar"
+              onChange={(e) => setArahan((a) => ({ ...a, cta: e.target.value }))}
+            />
+          </div>
         </div>
 
         {daftarBahan.length > 0 && (

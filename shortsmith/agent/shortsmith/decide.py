@@ -18,7 +18,7 @@ from pathlib import Path
 from .config import SETTINGS
 from .benih import Benih, benih
 from .identitas import model_untuk, sebab_gagal
-from .models import ConceptProfile, CutPlan, PlannedCut, ProjectMap
+from .models import Arahan, ConceptProfile, CutPlan, PlannedCut, ProjectMap
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +69,64 @@ def _format_profile(profile: ConceptProfile) -> str:
             )
 
     baris.append(f"Struktur yang diharapkan: {' -> '.join(r.value for r in profile.struktur)}")
+    return "\n".join(baris)
+
+
+def _format_arahan(arahan: Arahan | None) -> str | None:
+    """Empat komponen brief, ditulis sebagai syarat — bukan sebagai saran.
+
+    Nadanya sengaja berbeda dari `_format_fokus`. Fokus menyempitkan RUANG
+    pilihan ("ambil bagian yang membahas ini"); arahan menetapkan apa yang harus
+    ADA di hasilnya. Yang pertama boleh diterjemahkan longgar kalau bahannya
+    tidak ideal, yang kedua tidak — pengguna menuliskannya justru karena
+    videonya dipakai untuk sesuatu.
+
+    Yang TIDAK dilakukan di sini: menyuruh model mengarang kalimat untuk memenuhi
+    komponennya. Semua yang keluar tetap harus berasal dari rekaman. Kalau
+    bahannya benar-benar tidak memuat narasinya, yang benar adalah memilih yang
+    paling mendekati dan membiarkan kekurangannya terlihat, bukan menambal
+    dengan potongan yang tidak mengatakannya.
+    """
+    if arahan is None or not arahan.terisi():
+        return None
+
+    baris = [
+        "Empat komponen berikut diisi pengguna dan WAJIB terpenuhi. Ini bukan "
+        "bahan pertimbangan; ini syarat hasilnya.",
+        "",
+    ]
+    baris += [f"- {label}: {nilai}" for label, nilai in arahan.butir()]
+    # Petunjuk hanya untuk komponen yang BENAR-BENAR diisi. Menjelaskan cara
+    # memakai "kesan yang diinginkan" kepada pengguna yang mengosongkannya
+    # memaksa model mendamaikan aturan dengan bahan yang tidak ada.
+    baris += ["", "Cara memakainya:"]
+    if arahan.narasi.strip():
+        baris.append(
+            "- Pilih potongan yang benar-benar MENYAMPAIKAN narasinya. Potongan "
+            "yang cuma bersinggungan dengan temanya tidak memenuhi syarat ini."
+        )
+    if arahan.kesan.strip():
+        baris.append(
+            "- Susun urutannya supaya kesan yang diminta itulah yang terbentuk. "
+            "Urutan menentukan perasaan sama besarnya dengan isi."
+        )
+    if arahan.tujuan.strip():
+        baris.append(
+            "- Tujuan itu yang menentukan potongan mana yang layak masuk saat "
+            "dua potongan sama bagusnya. Pilih yang paling melayaninya."
+        )
+    baris.append(
+        "- Semua tetap harus berasal dari rekaman. JANGAN memaksakan potongan "
+        "yang tidak mengatakannya hanya supaya komponennya terlihat terpenuhi; "
+        "kalau bahannya kurang, ambil yang paling mendekati."
+    )
+    if arahan.cta.strip():
+        baris.append(
+            "- Potongan TERAKHIR harus membawa ajakan itu dan diberi role "
+            '"cta". Ambil bagian rekaman yang paling dekat dengan ajakan '
+            "tersebut; kalau pembicara tidak pernah mengajak secara langsung, "
+            "pakai kalimat penutup yang paling mengarah ke sana."
+        )
     return "\n".join(baris)
 
 
@@ -218,6 +276,7 @@ def _build_prompt(
     brief: str,
     b: Benih,
     *,
+    arahan: Arahan | None = None,
     koreksi: str | None = None,
 ) -> str:
     target = profile.target_duration()
@@ -233,6 +292,15 @@ def _build_prompt(
         "== FOKUS PEMBAHASAN ==",
         _format_fokus(brief, profile),
         "",
+    ]
+
+    # Ditaruh SETELAH fokus dan sebelum durasi: ia menyempitkan isi, dan yang
+    # menyempitkan isi harus terbaca sebelum yang mengatur panjang.
+    teks_arahan = _format_arahan(arahan)
+    if teks_arahan:
+        bagian += ["== ARAHAN WAJIB ==", teks_arahan, ""]
+
+    bagian += [
         "== DURASI ==",
         f"Video contoh untuk konsep ini rata-rata {target:.0f} detik. Itu GAMBARAN GAYA, "
         f"bukan target yang harus dikejar. Panjang hasil ditentukan oleh materinya: "
@@ -288,7 +356,12 @@ ZOOM_MAKS_DETIK = 15.0
 ZOOM_DARI_KERAPATAN_MAKS = 1.4
 
 
-def _validate(cuts: list[PlannedCut], vmap: ProjectMap, profile: ConceptProfile) -> list[str]:
+def _validate(
+    cuts: list[PlannedCut],
+    vmap: ProjectMap,
+    profile: ConceptProfile,
+    arahan: Arahan | None = None,
+) -> list[str]:
     """Clamp in-place ke durasi video sumbernya, lalu kembalikan sisa masalah."""
     masalah: list[str] = []
 
@@ -380,6 +453,25 @@ def _validate(cuts: list[PlannedCut], vmap: ProjectMap, profile: ConceptProfile)
 
     if not any(c.role.value == "hook" for c in cuts):
         masalah.append("Tidak ada potongan dengan role 'hook'.")
+
+    # CTA yang diminta pengguna diperiksa di sini, bukan cuma dititipkan ke
+    # prompt.
+    #
+    # Dari empat komponen arahan, hanya ini yang punya bentuk yang bisa
+    # diperiksa mesin: ajakan datang di AKHIR. Narasi, kesan, dan tujuan cuma
+    # bisa dinilai dengan membaca, dan pemeriksa yang menebak-nebak keduanya
+    # akan menolak rencana yang benar sama seringnya dengan yang salah.
+    #
+    # Memeriksa yang satu ini tetap berharga: ia justru komponen yang paling
+    # mudah terlupakan, karena potongan terkuat hampir tidak pernah kebetulan
+    # berupa ajakan.
+    if arahan is not None and arahan.cta.strip() and cuts:
+        if cuts[-1].role.value != "cta":
+            masalah.append(
+                "Pengguna meminta CTA di akhir video, tapi potongan terakhir "
+                f"berrole '{cuts[-1].role.value}'. Potongan penutup harus membawa "
+                f"ajakan \"{arahan.cta.strip()[:120]}\" dan diberi role 'cta'."
+            )
 
     if dilepas:
         log.info(
@@ -563,7 +655,11 @@ def _call_llm(prompt: str, b: Benih) -> CutPlan:
 
 
 def decide(
-    vmap: ProjectMap, profile: ConceptProfile, brief: str = "", jenis: str = "short"
+    vmap: ProjectMap,
+    profile: ConceptProfile,
+    brief: str = "",
+    jenis: str = "short",
+    arahan: Arahan | None = None,
 ) -> CutPlan:
     """Hasilkan rencana potongan yang sudah tervalidasi. Satu kali percobaan perbaikan.
 
@@ -580,14 +676,14 @@ def decide(
     bnh = benih(jenis)
     koreksi: str | None = None
     for percobaan in (1, 2):
-        prompt = _build_prompt(vmap, profile, brief, bnh, koreksi=koreksi)
+        prompt = _build_prompt(vmap, profile, brief, bnh, arahan=arahan, koreksi=koreksi)
         log.info(
             "meminta rencana potongan ke %s sebagai %s (percobaan %d)",
             model_untuk(bnh.identitas), bnh.identitas, percobaan,
         )
         plan = _call_llm(prompt, bnh)
 
-        masalah = _validate(plan.cuts, vmap, profile)
+        masalah = _validate(plan.cuts, vmap, profile, arahan)
         if not masalah:
             plan.cuts = [c for c in plan.cuts if c.out > c.in_]
             log.info(

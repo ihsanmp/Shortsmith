@@ -39,6 +39,7 @@ from .config import SETTINGS
 from .decide import decide
 from .models import (
     EDL,
+    Arahan,
     ConceptProfile,
     Cut,
     CutPlan,
@@ -557,6 +558,7 @@ def run_banyak(
     on_klip: Callable[[Path], None] | None = None,
     minta_topik: Callable[[list[str]], list[str]] | None = None,
     topik_lama: Callable[[], list[str] | None] | None = None,
+    arahan: Arahan | None = None,
     **kw,
 ) -> list[Path]:
     """Jalankan pipeline, menghasilkan BEBERAPA klip kalau topiknya dikosongkan.
@@ -582,10 +584,11 @@ def run_banyak(
 
     # Topik yang diisi pengguna, atau jenis yang tidak boleh dipecah: satu klip,
     # dan tidak ada yang perlu ditanyakan.
-    if not boleh_dipecah(jenis, brief):
+    if not boleh_dipecah(jenis, brief, arahan):
         satu = run(
             sources, profile, output,
-            brief=brief, job_id=job_id, on_progress=on_progress, jenis=jenis, **kw,
+            brief=brief, job_id=job_id, on_progress=on_progress, jenis=jenis,
+            arahan=arahan, **kw,
         )
         if satu is not None:
             _lapor_klip(on_klip, satu)
@@ -655,6 +658,7 @@ def run(
     jenis: str = "short",
     on_progress: Callable[[int, str], None] | None = None,
     penulis: "Antre | None" = None,
+    arahan: Arahan | None = None,
 ) -> Path | None:
     """Jalankan pipeline penuh. Kembalikan path hasil, atau None kalau dry_run.
 
@@ -682,7 +686,7 @@ def run(
     else:
         log.info("[2/5] menyusun rencana potongan")
         lapor(45, "memilih potongan")
-        plan = decide(vmap, profile, brief, jenis)
+        plan = decide(vmap, profile, brief, jenis, arahan)
         _write_json(plan_file, plan)
     log.info("      %s", plan.ringkasan)
 

@@ -841,10 +841,16 @@ def run(
     # tiap keterangan ke klipnya tanpa perlu aturan penamaan tambahan.
     from .keterangan import tulis as tulis_keterangan
 
+    # Tiap potongan dibaca dari videonya SENDIRI. `c.sumber` menunjuk video mana
+    # yang dipakai, dan mengambil semuanya dari videos[0] berarti mencari
+    # timestamp potongan di garis waktu berkas lain — yang terkumpul adalah
+    # ucapan yang tidak ada di klipnya. Keterangan yang lahir dari situ
+    # menceritakan kalimat yang tidak pernah terdengar, persis yang dilarang
+    # prompt-nya sendiri.
     ucapan = " ".join(
         seg.text.strip()
         for c in plan.cuts
-        for seg in vmap.videos[0].segments
+        for seg in (vmap.get(c.sumber) or vmap.videos[0]).segments
         if seg.start >= c.in_ - 0.5 and seg.end <= c.out + 0.5 and seg.text.strip()
     )
     ket = tulis_keterangan(ucapan, jenis=jenis, topik=brief or profile.manual.fokus)

@@ -4887,9 +4887,26 @@ body:has(.hero) {
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--surface-3);
-  color: var(--ink-3);
+  /* Semula --ink-3, dan terukur 4,06:1 — di bawah ambang 4,5:1.
+     Chip ini hidup di dalam .panel, tempat token dibalik jadi palet terang:
+     --ink-3 di situ #52627a di atas --surface-3 #d2d1ce. Di latar gelap
+     kombinasi yang sama memberi 5,77 dan aman, jadi cacatnya hanya muncul di
+     tempat chip-nya benar-benar dipakai — dan tidak akan terlihat kalau
+     tokennya dinilai sendirian. */
+  color: var(--ink-2);
   cursor: pointer;
   transition: border-color var(--t), color var(--t), background var(--t);
+}
+
+/* Setinggi 29px, chip ini satu-satunya kontrol di form yang di bawah 44px —
+   yang lain, semuanya, sudah 44 atau lebih. Ditinggikan HANYA untuk penunjuk
+   kasar: jari butuh 44px, kursor tidak, dan tombol setinggi jempol di layar
+   desktop cuma memakan ruang tanpa membeli apa pun. */
+@media (pointer: coarse) {
+  .chip {
+    min-height: 44px;
+    padding-inline: 14px;
+  }
 }
 
 .chip:hover:not(:disabled) {
@@ -4902,11 +4919,29 @@ body:has(.hero) {
   cursor: default;
 }
 
-/* Terpilih ditandai warna DAN border, bukan warna saja: kontras warna sendirian
-   hilang untuk sebagian pembaca, dan chip ini menentukan isi videonya. */
-.chip-aktif,
-.chip-aktif:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
-  background: color-mix(in oklab, var(--accent) 14%, transparent);
+/* Terpilih diisi penuh, bukan diberi semburat.
+   ## Kenapa bukan color-mix lagi
+
+   Versi sebelumnya memakai `color-mix(... var(--accent) 14%, transparent)` untuk
+   latar dan 55% untuk garis, dengan `color: var(--accent)` sebagai penanda
+   utamanya. Terukur di halaman yang jalan: warna teks chip terpilih PERSIS SAMA
+   dengan yang tidak terpilih -- selisih RGB-nya nol. Yang tersisa sebagai
+   penanda cuma semburat 14% di atas latar terang panel, dan semburat setipis
+   itu di atas #d2d1ce nyaris tidak terbaca sebagai "dipilih".
+
+   Chip ini menentukan isi videonya. Penanda yang butuh dibandingkan
+   berdampingan untuk terlihat bukan penanda.
+
+   Isian penuh memakai token yang sudah pasti terhitung di kedua lingkup:
+   --accent tidak ditimpa .panel, dan --bg juga tidak, jadi teks gelap di atas
+   biru terang berlaku sama di latar gelap maupun di dalam panel terang.
+
+   Tebal hurufnya sengaja ikut berubah: penanda yang hanya berupa warna hilang
+   untuk sebagian pembaca, dan di sini pilihannya menentukan hasil. */
+.chip.chip-aktif,
+.chip.chip-aktif:hover:not(:disabled) {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
 }

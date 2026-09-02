@@ -92,7 +92,22 @@
   --ink: #f1f5f9;
   --ink-2: #cbd5e1;
   --ink-3: #94a3b8;
-  --ink-4: #64748b;
+  /* Dulu #64748b, dan itu tidak pernah lolos ambang kontras 4,5:1 di latar
+     mana pun yang dipakai aplikasi ini:
+
+         di --bg #0b0d18        4,07
+         di --surface #141728   3,73
+         di --surface-2 #191d33 3,49
+         di --surface-3 #212642 3,11
+
+     Ia dipakai 26 tempat, sebagian besar sebagai warna teks — termasuk .hint,
+     yang muncul 29 kali di 9 berkas dan justru teks yang menjelaskan cara
+     mengisi form. Teks yang menerangkan tidak boleh jadi teks yang paling sulit
+     dibaca.
+
+     #8291a6 lolos di keempatnya (6,04 / 5,54 / 5,18 / 4,61) dan tetap jelas
+     lebih redup dari --ink-3, jadi tingkatannya tidak runtuh jadi satu. */
+  --ink-4: #8291a6;
 
   --line: #262b45;
   --line-2: #343a5c;
@@ -4018,8 +4033,30 @@ body:has(.hero) {
 .panel {
   --ink: #0f172a;
   --ink-2: #334155;
-  --ink-3: #52627a;
-  --ink-4: #6b7a90;
+  /* Kedua tingkat redup di sini digelapkan, dan keduanya memang harus.
+     Di latar terang panel, angka lamanya:
+
+                       #e5e4e2  #dcdbd8  #d2d1ce
+         ink-3 #52627a    4,88     4,48     4,06
+         ink-4 #6b7a90    3,43     3,15     2,86
+
+     ink-3 hanya lolos di latar paling terang, ink-4 tidak lolos di mana pun —
+     dan placeholder input memakai ink-4, jadi teks yang memberi contoh isian
+     terbaca pada 2,86.
+
+     Menggeser ink-4 saja tidak cukup: untuk lolos di #d2d1ce ia harus lebih
+     gelap dari ink-3 yang sekarang, dan tingkatannya akan terbalik. Karena itu
+     keduanya ditata ulang berpasangan.
+
+         ink-3 #3c4a60    7,06     6,48     5,88
+         ink-4 #4c5a70    5,50     5,05     4,58
+
+     Jarak ke --ink-2 (6,78 di latar tersulit) memang jadi lebih rapat. Itu
+     ongkos yang tidak terhindarkan: di latar terang, ruang di bawah ink-2
+     sempit. Tingkatan yang rapat tapi seluruhnya terbaca lebih berguna daripada
+     tingkatan yang lebar dengan ujung yang tidak terbaca. */
+  --ink-3: #3c4a60;
+  --ink-4: #4c5a70;
   --surface: #e5e4e2;
   --surface-2: #dcdbd8;
   --surface-3: #d2d1ce;

@@ -498,6 +498,8 @@ class Daemon:
             antre.shutdown(wait=True)
 
         self._lengkapi_unggahan(klip, hasil_unggah, job)
+        for k, r in hasil_unggah.items():
+            self._lampirkan_keterangan(k, r)
 
         naik = [k for k in klip if k in hasil_unggah]
         if not naik:
@@ -640,6 +642,29 @@ class Daemon:
             except Exception as exc:  # noqa: BLE001
                 log.warning("%s tetap gagal diunggah (%s)", k.name, exc)
 
+    @staticmethod
+    def _lampirkan_keterangan(k: Path, ringkas: dict) -> None:
+        """Sisipkan keterangan unggahan klip `k` ke ringkasannya, kalau ada.
+
+        Dipanggil setelah `run_banyak` kembali, dan itu penting: pipeline
+        menulis keterangan di thread terpisah supaya panggilan `claude -p`-nya
+        bersembunyi di balik render klip berikutnya, lalu menunggunya selesai
+        sebelum kembali. Sebelum titik itu, berkasnya belum tentu ada.
+
+        Tidak ada berkas berarti gagal ditulis atau klipnya terlalu pendek untuk
+        ditulis keterangannya secara jujur — bukan kegagalan, dan tidak perlu
+        disebut.
+        """
+        sisi = k.with_suffix(".txt")
+        if not sisi.exists():
+            return
+        try:
+            isi = sisi.read_text(encoding="utf-8").strip()
+            if isi:
+                ringkas["keterangan"] = isi[:4000]
+        except OSError as exc:
+            log.warning("keterangan %s tidak terbaca: %s", sisi.name, exc)
+
     def _unggah_satu(self, k: Path, job: dict[str, Any], indeks: int) -> dict:
         """Unggah satu klip dan kembalikan ringkasannya untuk laporan job.
 
@@ -666,17 +691,10 @@ class Daemon:
             "durasi": round(info.durasi, 3),
         }
 
-        # Keterangan unggahan ditulis pipeline berdampingan dengan videonya.
-        # Tidak ada berarti gagal ditulis atau klipnya terlalu pendek — bukan
-        # kegagalan, dan tidak perlu disebut.
-        sisi = k.with_suffix(".txt")
-        if sisi.exists():
-            try:
-                isi = sisi.read_text(encoding="utf-8").strip()
-                if isi:
-                    ringkas["keterangan"] = isi[:4000]
-            except OSError as exc:
-                log.warning("keterangan %s tidak terbaca: %s", sisi.name, exc)
+        # Keterangannya TIDAK dibaca di sini. Pipeline menulisnya di latar
+        # supaya panggilan `claude -p` tidak menahan render, jadi saat klip ini
+        # diunggah berkasnya mungkin belum ada. Dilampirkan nanti, sesudah
+        # seluruh render selesai — lihat `_lampirkan_keterangan`.
         return ringkas
 
     def _simpan_hasil(self, berkas: Path, job: dict[str, Any]) -> Path | None:

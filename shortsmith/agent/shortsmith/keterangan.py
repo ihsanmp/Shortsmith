@@ -38,6 +38,8 @@ import json
 import logging
 import shutil
 import subprocess
+from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
 
 from .identitas import model_untuk, sebab_gagal
 
@@ -179,3 +181,68 @@ def tulis(ucapan: str, *, jenis: str = "short", topik: str = "") -> str:
     except Exception as exc:  # noqa: BLE001
         log.warning("keterangan gagal ditulis (%s) — dilewati", exc)
         return ""
+
+
+def tulis_ke(tujuan: Path, ucapan: str, *, jenis: str = "short", topik: str = "") -> None:
+    """`tulis()` lalu simpan ke `tujuan`. Tidak menulis apa-apa kalau kosong."""
+    ket = tulis(ucapan, jenis=jenis, topik=topik)
+    if not ket:
+        return
+    try:
+        tujuan.write_text(ket, encoding="utf-8")
+    except OSError as exc:
+        log.warning("keterangan gagal disimpan ke %s: %s", tujuan.name, exc)
+
+
+class Antre:
+    """Menulis keterangan di latar, di luar jalur kerja utama.
+
+    ## Kenapa perlu
+
+    `tulis()` menunggu jawaban `claude -p` — terukur 19,5 detik. Dipanggil di
+    tempatnya semula, tepat sebelum `run()` mengembalikan hasilnya, detik-detik
+    itu dibayar dua kali:
+
+      - CPU menganggur. Tidak ada yang dirender selama panggilan itu menunggu
+        jaringan.
+      - Klip baru dilaporkan setelah keterangannya jadi, jadi unggahannya ikut
+        mundur — padahal tumpang-tindih unggahan ada justru supaya waktu unggah
+        bersembunyi di balik render.
+
+    Render satu klip makan menit; panggilan ini makan 20 detik. Ia muat utuh di
+    dalam bayangan render klip berikutnya, jadi menaruhnya di sini menghapus
+    ongkosnya, bukan memindahkannya. Klip terakhir tetap membayar penuh — tidak
+    ada render di belakangnya untuk menyembunyikannya.
+
+    ## Kenapa satu pekerja
+
+    Antreannya tidak pernah menumpuk: satu keterangan (20 detik) selesai jauh
+    sebelum klip berikutnya (menit) tiba. Menambah pekerja berarti beberapa
+    `claude -p` berjalan bersamaan tanpa satu detik pun yang dihemat.
+
+    ## Kenapa pemanggil wajib `tunggu()`
+
+    Laporan job memuat keterangannya, dan laporan itu dikirim setelah render
+    selesai. Tanpa titik tunggu yang tegas, ada klip yang naik tanpa teks —
+    kegagalan yang bergantung pada waktu, jadi ia muncul di sebagian job saja
+    dan justru di job yang paling sibuk.
+    """
+
+    def __init__(self) -> None:
+        self._ex = ThreadPoolExecutor(max_workers=1, thread_name_prefix="keterangan")
+        self._tugas: list[Future] = []
+
+    def kirim(self, tujuan: Path, ucapan: str, *, jenis: str, topik: str) -> None:
+        self._tugas.append(self._ex.submit(tulis_ke, tujuan, ucapan, jenis=jenis, topik=topik))
+
+    def tunggu(self) -> None:
+        """Tunggu semua keterangan selesai ditulis. Aman dipanggil berulang."""
+        for f in self._tugas:
+            try:
+                f.result()
+            except Exception as exc:  # noqa: BLE001
+                # `tulis_ke` sudah menelan kegagalannya sendiri; ini jaring
+                # terakhir supaya satu keterangan tidak pernah menjatuhkan job.
+                log.warning("keterangan gagal di latar (%s) — dilewati", exc)
+        self._tugas.clear()
+        self._ex.shutdown(wait=True)

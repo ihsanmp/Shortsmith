@@ -23,6 +23,8 @@ setiap kali.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import json
 import logging
 import os
@@ -47,6 +49,9 @@ from .models import (
 )
 from .renderer import get_renderer
 from .wajah import lacak, periksa_adegan
+
+if TYPE_CHECKING:  # hanya untuk anotasi; impor nyatanya lokal di _render_topik
+    from .keterangan import Antre
 
 log = logging.getLogger(__name__)
 
@@ -473,14 +478,44 @@ def _render_topik(
     Dipisah karena dipanggil dari DUA tempat: alur biasa, dan jalan pintas untuk
     job yang diulang dan pilihan topiknya sudah tersimpan. Menyalin loopnya ke
     dua tempat berarti perbaikan di satu sisi diam-diam tidak sampai ke sisi lain.
+
+    Antrean keterangan dimiliki DI SINI, bukan di `run()`: yang tahu kapan klip
+    terakhir selesai adalah loop ini, dan hanya dari sini titik tunggunya bisa
+    ditaruh setelah seluruh render — yang membuat tiap keterangan bersembunyi di
+    balik render klip berikutnya.
     """
+    from .keterangan import Antre
+
+    penulis = Antre()
+    try:
+        return _render_topik_inti(
+            topik, sources, profile, output, jenis, job_id, on_progress, on_klip, kw, penulis
+        )
+    finally:
+        # Laporan job memuat keterangannya dan dikirim tepat setelah ini.
+        penulis.tunggu()
+
+
+def _render_topik_inti(
+    topik: list[str],
+    sources,
+    profile,
+    output: Path,
+    jenis: str,
+    job_id: str | None,
+    on_progress,
+    on_klip: Callable[[Path], None] | None,
+    kw: dict,
+    penulis,
+) -> list[Path]:
     if not topik:
         # Rekaman pendek, pencarian topik gagal, atau pengguna sengaja tidak
         # mencentang apa pun: satu klip tanpa arahan, persis perilaku lama.
         log.info("tidak ada topik terpilih — dibuat satu klip tanpa arahan")
         satu = run(
             sources, profile, output,
-            brief="", job_id=job_id, on_progress=on_progress, jenis=jenis, **kw,
+            brief="", job_id=job_id, on_progress=on_progress, jenis=jenis,
+            penulis=penulis, **kw,
         )
         if satu is not None:
             _lapor_klip(on_klip, satu)
@@ -498,7 +533,7 @@ def _render_topik(
             k = run(
                 sources, profile, keluar,
                 brief=t, job_id=job_id, sufiks="" if i == 1 else f"_{i}",
-                on_progress=on_progress, jenis=jenis, **kw,
+                on_progress=on_progress, jenis=jenis, penulis=penulis, **kw,
             )
             if k:
                 hasil.append(k)
@@ -619,6 +654,7 @@ def run(
     sufiks: str = "",
     jenis: str = "short",
     on_progress: Callable[[int, str], None] | None = None,
+    penulis: "Antre | None" = None,
 ) -> Path | None:
     """Jalankan pipeline penuh. Kembalikan path hasil, atau None kalau dry_run.
 
@@ -839,7 +875,7 @@ def run(
     # hasil.json: hasil.json satu per job, sementara satu job bisa menghasilkan
     # lima klip yang keterangannya berbeda-beda. Berkas berdampingan mengikat
     # tiap keterangan ke klipnya tanpa perlu aturan penamaan tambahan.
-    from .keterangan import tulis as tulis_keterangan
+    from .keterangan import tulis_ke as tulis_keterangan_ke
 
     # Tiap potongan dibaca dari videonya SENDIRI. `c.sumber` menunjuk video mana
     # yang dipakai, dan mengambil semuanya dari videos[0] berarti mencari
@@ -853,9 +889,17 @@ def run(
         for seg in (vmap.get(c.sumber) or vmap.videos[0]).segments
         if seg.start >= c.in_ - 0.5 and seg.end <= c.out + 0.5 and seg.text.strip()
     )
-    ket = tulis_keterangan(ucapan, jenis=jenis, topik=brief or profile.manual.fokus)
-    if ket:
-        hasil.with_suffix(".txt").write_text(ket, encoding="utf-8")
+    # Dititipkan ke antrean kalau ada yang menyediakannya — lihat `Antre` di
+    # keterangan.py untuk alasannya. Tanpa antrean (pemanggil CLI langsung),
+    # ditulis di tempat: pemanggil itu tidak punya pekerjaan lain untuk
+    # ditumpangi, dan mengembalikan hasil tanpa keterangannya berarti fiturnya
+    # hilang diam-diam di jalur yang tidak lewat daemon.
+    sisi = hasil.with_suffix(".txt")
+    topik_ket = brief or profile.manual.fokus
+    if penulis is not None:
+        penulis.kirim(sisi, ucapan, jenis=jenis, topik=topik_ket)
+    else:
+        tulis_keterangan_ke(sisi, ucapan, jenis=jenis, topik=topik_ket)
 
     ringkasan = {
         "job_id": job_id,

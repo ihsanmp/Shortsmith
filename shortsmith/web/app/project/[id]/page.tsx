@@ -7,7 +7,7 @@ import { Keterangan } from "@/components/ui/keterangan";
 import { Konfirmasi } from "@/components/ui/konfirmasi";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
-import { galatDari } from "@/lib/galat";
+import { useJajakProject } from "@/lib/jajak";
 
 type Status = "pending" | "processing" | "done" | "failed";
 
@@ -50,37 +50,16 @@ type Data = {
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const [data, setData] = useState<Data | null>(null);
   const [hapusBusy, setHapusBusy] = useState(false);
   const [tanyaHapus, setTanyaHapus] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout>;
-
-    async function poll() {
-      try {
-        const res = await fetch(`/api/projects/${id}`, { cache: "no-store" });
-        if (!res.ok) throw new Error(await galatDari(res, "Gagal memuat"));
-        const d: Data = await res.json();
-        if (!alive) return;
-        setData(d);
-
-        // Berhenti polling begitu job mencapai keadaan akhir.
-        const selesai = d.project.status === "done" || d.project.status === "failed";
-        if (!selesai) timer = setTimeout(poll, 4000);
-      } catch (err) {
-        if (alive) setError((err as Error).message);
-      }
-    }
-
-    poll();
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [id]);
+  // Terpisah dari galat penjajakan: yang satu hilang sendiri begitu jaringan
+  // pulih, yang satu lagi menunggu pengguna memutuskan sesuatu.
+  const [galatHapus, setGalatHapus] = useState("");
+  // Berhenti menjajak begitu job mencapai keadaan akhir.
+  const { data, error } = useJajakProject<Data>(
+    id,
+    (d) => d.project.status === "done" || d.project.status === "failed",
+  );
 
   // Selama render berjalan, tempatnya bukan di sini.
   //
@@ -93,8 +72,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }
   }, [data?.job?.status, id, router]);
 
-  if (error) return <div className="notice err">{error}</div>;
-  if (!data) return <div className="empty">Memuat...</div>;
+  const pesanGalat = galatHapus || error;
+  if (!data) {
+    return pesanGalat ? (
+      <div className="notice err">{pesanGalat}</div>
+    ) : (
+      <div className="empty">Memuat...</div>
+    );
+  }
 
   const { project, job, output } = data;
   // Jatuh kembali ke `output` tunggal kalau daftar belum ada.
@@ -125,12 +110,17 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     } catch (err) {
       setTanyaHapus(false);
       setHapusBusy(false);
-      setError((err as Error).message);
+      setGalatHapus((err as Error).message);
     }
   }
 
   return (
     <>
+      {pesanGalat && (
+        <div className="notice err" role="alert" style={{ marginBottom: 16 }}>
+          {pesanGalat}
+        </div>
+      )}
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 24 }}>
         <div>
           <div className="badge">Project</div>

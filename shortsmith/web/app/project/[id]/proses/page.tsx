@@ -1,13 +1,13 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use } from "react";
 import { useRouter } from "next/navigation";
 
 import { PemuatAI } from "@/components/ui/pemuat-ai";
 import { PilihTopik } from "@/components/pilih-topik";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TombolKembali } from "@/components/ui/tombol-kembali";
-import { galatDari } from "@/lib/galat";
+import { useJajakProject } from "@/lib/jajak";
 
 /**
  * Halaman khusus selama render berjalan.
@@ -44,40 +44,14 @@ type Data = {
 export default function HalamanProses({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const [data, setData] = useState<Data | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout>;
-
-    async function poll() {
-      try {
-        const res = await fetch(`/api/projects/${id}`, { cache: "no-store" });
-        if (!res.ok) throw new Error(await galatDari(res, "Gagal memuat"));
-        const d: Data = await res.json();
-        if (!alive) return;
-        setData(d);
-
-        // `replace`, bukan `push`: halaman ini tidak boleh masuk riwayat.
-        // Kalau masuk, menekan Back dari halaman project akan mengembalikan
-        // pengguna ke layar tunggu untuk proses yang sudah selesai.
-        if (d.job?.status !== "processing" && d.project.status !== "processing") {
-          router.replace(`/project/${id}`);
-          return;
-        }
-        timer = setTimeout(poll, 4000);
-      } catch (err) {
-        if (alive) setError((err as Error).message);
-      }
-    }
-
-    poll();
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [id, router]);
+  const { data, error, setData } = useJajakProject<Data>(id, (d) => {
+    if (d.job?.status === "processing" || d.project.status === "processing") return false;
+    // `replace`, bukan `push`: halaman ini tidak boleh masuk riwayat. Kalau
+    // masuk, menekan Back dari halaman project akan mengembalikan pengguna ke
+    // layar tunggu untuk proses yang sudah selesai.
+    router.replace(`/project/${id}`);
+    return true;
+  });
 
   const tahap = data?.job?.tahap?.trim() || "Memproses";
   const progres = data?.job?.progress ?? 0;

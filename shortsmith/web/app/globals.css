@@ -4870,3 +4870,43 @@ body:has(.hero) {
   font-size: 0.9rem;
   color: var(--ink-2);
 }
+
+/* Chip pilihan cepat di dalam blok arahan. */
+.chip-baris {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.chip {
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: border-color var(--t), color var(--t), background var(--t);
+}
+
+.chip:hover:not(:disabled) {
+  color: var(--ink-2);
+  border-color: var(--line-2);
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Terpilih ditandai warna DAN border, bukan warna saja: kontras warna sendirian
+   hilang untuk sebagian pembaca, dan chip ini menentukan isi videonya. */
+.chip-aktif,
+.chip-aktif:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}

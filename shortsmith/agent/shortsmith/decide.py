@@ -95,7 +95,25 @@ def _format_arahan(arahan: Arahan | None) -> str | None:
         "bahan pertimbangan; ini syarat hasilnya.",
         "",
     ]
-    baris += [f"- {label}: {nilai}" for label, nilai in arahan.butir()]
+
+    # Tiap komponen jadi BLOK berlabel, dan isinya diindentasi.
+    #
+    # Sebelumnya ditulis "- <label>: <nilai>" satu baris. Itu benar untuk nilai
+    # sebaris, dan hancur untuk yang sebenarnya dikirim pengguna: narasi mereka
+    # berupa daftar berbutir, dan butir-butirnya menyatu dengan daftar
+    # komponennya sendiri —
+    #
+    #     - Narasi yang wajib sampai: - Menunjukkan perjalanan hidup David
+    #     - Membuat audience relate
+    #     - Fokus kemampuan David di dunia saham
+    #     - Kesan yang diinginkan: Edukatif / step-by-step
+    #
+    # dan "Kesan yang diinginkan" terbaca sebagai butir keempat dari narasinya.
+    # Batas antar komponen hilang persis di tempat yang paling mahal.
+    for label, nilai in arahan.butir():
+        baris.append(f"{label.upper()}:")
+        baris += [f"    {b}" for b in nilai.splitlines() if b.strip()]
+        baris.append("")
     # Petunjuk hanya untuk komponen yang BENAR-BENAR diisi. Menjelaskan cara
     # memakai "kesan yang diinginkan" kepada pengguna yang mengosongkannya
     # memaksa model mendamaikan aturan dengan bahan yang tidak ada.
@@ -105,6 +123,17 @@ def _format_arahan(arahan: Arahan | None) -> str | None:
             "- Pilih potongan yang benar-benar MENYAMPAIKAN narasinya. Potongan "
             "yang cuma bersinggungan dengan temanya tidak memenuhi syarat ini."
         )
+        # Narasi berbutir banyak adalah bentuk yang biasa dipakai, dan enam
+        # butir tidak muat utuh di satu short 45 detik. Tanpa aturan urutan,
+        # yang tersisa ditentukan kebetulan — dan butir pertama, yang biasanya
+        # paling penting, bisa jadi justru yang terbuang.
+        if len([b for b in arahan.narasi.splitlines() if b.strip()]) > 1:
+            baris.append(
+                "- Narasinya berisi beberapa butir. Usahakan SEMUANYA tersentuh. "
+                "Kalau bahannya tidak cukup untuk semua, urutan di atas adalah "
+                "urutan kepentingan: butir pertama tidak boleh hilang, butir "
+                "terakhir yang pertama dilepas."
+            )
     if arahan.kesan.strip():
         baris.append(
             "- Susun urutannya supaya kesan yang diminta itulah yang terbentuk. "
@@ -127,6 +156,17 @@ def _format_arahan(arahan: Arahan | None) -> str | None:
             "tersebut; kalau pembicara tidak pernah mengajak secara langsung, "
             "pakai kalimat penutup yang paling mengarah ke sana."
         )
+        # CTA-nya boleh bersyarat, dan memang begitu dipakai: "kalau topiknya
+        # soal AI, ajak ke workshop; kalau soal crypto, ajak ke komunitas".
+        # Tanpa baris ini model bisa memperlakukan seluruh teks syarat itu
+        # sebagai satu ajakan harfiah yang harus disebut apa adanya.
+        if len(arahan.cta.strip().splitlines()) > 1 or "jika" in arahan.cta.lower():
+            baris.append(
+                "- Ajakan di atas BERSYARAT. Tentukan dulu klip ini sebenarnya "
+                "membahas apa, pilih cabang yang cocok, lalu penuhi cabang ITU "
+                "saja. Jangan menggabungkan beberapa cabang, dan jangan "
+                "menyebut syaratnya sebagai bagian dari videonya."
+            )
     return "\n".join(baris)
 
 
@@ -470,7 +510,7 @@ def _validate(
             masalah.append(
                 "Pengguna meminta CTA di akhir video, tapi potongan terakhir "
                 f"berrole '{cuts[-1].role.value}'. Potongan penutup harus membawa "
-                f"ajakan \"{arahan.cta.strip()[:120]}\" dan diberi role 'cta'."
+                f"ajakan berikut dan diberi role 'cta':\n{arahan.cta.strip()[:400]}"
             )
 
     if dilepas:

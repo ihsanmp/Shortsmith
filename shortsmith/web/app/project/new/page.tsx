@@ -91,6 +91,29 @@ type FolderBahan = {
 const MAKS_MENTAH = 10;
 
 
+/**
+ * Pilihan cepat untuk dua komponen yang isinya berulang.
+ *
+ * Daftarnya diambil dari brief yang benar-benar dipakai, bukan dari daftar
+ * tujuan pemasaran yang dikarang: menambah pilihan yang belum pernah dipakai
+ * berarti menaruh kata-kata di mulut pengguna, dan pilihan yang salah lebih
+ * mahal daripada mengetik.
+ *
+ * Karena itu keduanya tetap TEXTAREA. Chip menempel dan melepas teks; apa pun
+ * boleh diketik sendiri, termasuk yang tidak ada di sini.
+ */
+const KESAN_UMUM = [
+  "Serius / informatif",
+  "Edukatif / step-by-step",
+  "Casual / relatable",
+  "Inspiratif / emotional",
+];
+
+const TUJUAN_UMUM = [
+  "Brand awareness: orang tahu brand/konten",
+  "Traffic: orang kunjungi website / profile / streaming page",
+];
+
 export default function NewProjectPage() {
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [conceptId, setConceptId] = useState("");
@@ -99,6 +122,26 @@ export default function NewProjectPage() {
   // dikirim, dan dinilai "terisi atau tidak" bersama-sama.
   const [arahan, setArahan] = useState({ narasi: "", kesan: "", tujuan: "", cta: "" });
   const arahanTerisi = Object.values(arahan).some((v) => v.trim());
+
+  /** Tempel atau lepas satu label dari isian yang dipisah koma. */
+  function petikChip(kunci: "kesan" | "tujuan", label: string) {
+    setArahan((a) => {
+      const ada = a[kunci]
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      const baru = ada.includes(label)
+        ? ada.filter((x) => x !== label)
+        : [...ada, label];
+      return { ...a, [kunci]: baru.join(", ") };
+    });
+  }
+
+  const chipAktif = (kunci: "kesan" | "tujuan", label: string) =>
+    arahan[kunci]
+      .split(",")
+      .map((x) => x.trim())
+      .includes(label);
 
 
   // Sengaja DUA kolom terpisah, bukan satu kolom multi-file. Browser
@@ -801,29 +844,60 @@ export default function NewProjectPage() {
               id="ar-narasi"
               value={arahan.narasi}
               disabled={busy}
-              placeholder="mis. modal kecil bukan alasan untuk tidak mulai"
+              placeholder={"Boleh beberapa butir, satu per baris:\n- Menunjukkan perjalanan dan pelajarannya\n- Highlight komunitasnya"}
               onChange={(e) => setArahan((a) => ({ ...a, narasi: e.target.value }))}
             />
           </div>
 
           <div>
             <label htmlFor="ar-kesan">Kesan yang diinginkan</label>
+            {/* Chip di ATAS isian, bukan di bawah: ia jalan pintas menuju
+                isian itu, dan jalan pintas yang muncul setelah orang selesai
+                mengetik datang terlambat. */}
+            <div className="chip-baris">
+              {KESAN_UMUM.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={`chip${chipAktif("kesan", k) ? " chip-aktif" : ""}`}
+                  disabled={busy}
+                  aria-pressed={chipAktif("kesan", k)}
+                  onClick={() => petikChip("kesan", k)}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
             <textarea
               id="ar-kesan"
               value={arahan.kesan}
               disabled={busy}
-              placeholder="mis. tenang dan meyakinkan, bukan menggurui"
+              placeholder="pilih di atas, atau tulis sendiri"
               onChange={(e) => setArahan((a) => ({ ...a, kesan: e.target.value }))}
             />
           </div>
 
           <div>
             <label htmlFor="ar-tujuan">Tujuan campaign</label>
+            <div className="chip-baris">
+              {TUJUAN_UMUM.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={`chip${chipAktif("tujuan", t) ? " chip-aktif" : ""}`}
+                  disabled={busy}
+                  aria-pressed={chipAktif("tujuan", t)}
+                  onClick={() => petikChip("tujuan", t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
             <textarea
               id="ar-tujuan"
               value={arahan.tujuan}
               disabled={busy}
-              placeholder="mis. menaikkan pendaftaran kelas batch 3"
+              placeholder="pilih di atas, atau tulis sendiri"
               onChange={(e) => setArahan((a) => ({ ...a, tujuan: e.target.value }))}
             />
           </div>
@@ -834,7 +908,7 @@ export default function NewProjectPage() {
               id="ar-cta"
               value={arahan.cta}
               disabled={busy}
-              placeholder="mis. cek link di bio untuk daftar"
+              placeholder={"mis. Cek link di bio untuk daftar\n\nBoleh bersyarat:\n- Jika bahas AI, ajak cek workshop\n- Jika bahas crypto, ajak cek komunitas"}
               onChange={(e) => setArahan((a) => ({ ...a, cta: e.target.value }))}
             />
           </div>

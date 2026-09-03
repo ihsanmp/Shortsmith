@@ -2,41 +2,89 @@
   <title>Shortsmith</title>
 
   <!--
-    Huruf S berbentuk pita seluloid, dengan segitiga putar di tengahnya.
+    Huruf S berbentuk pita seluloid dengan ikon maju-cepat di pinggangnya.
 
-    Perforasinya TIDAK digambar satu per satu. Ketiga sapuan di bawah memakai
-    path yang sama persis:
+    Perforasinya digambar satu per satu, bukan lewat `stroke-dasharray`.
 
-      1. sapuan gelap selebar pita        -> badan filmnya
-      2. sapuan terang putus-putus        -> lubang di kedua tepi
-      3. sapuan gelap yang lebih tipis    -> saluran tengah, menutup bagian
-                                             dalam lubang tadi sehingga yang
-                                             tersisa hanya dua deret di tepi
+    Versi dash sempat dipakai: satu sapuan putus-putus di atas path yang sama,
+    lubangnya melengkung sendiri mengikuti huruf. Tapi dash berjarak sama diukur
+    di GARIS TENGAH pita, sementara yang dilihat mata adalah jaraknya di TEPI.
+    Pada huruf ini selisihnya besar sekali, terukur di path yang sama:
 
-    Karena dash mengikuti panjang path, lubangnya melengkung sendiri mengikuti
-    huruf S — tidak ada satu pun koordinat lubang yang dihitung tangan, dan
-    mengubah bentuk hurufnya tidak menuntut menata ulang lubangnya.
+        jarak antar lubang di tepi luar   9,8 sampai 13,2
+        jarak antar lubang di tepi dalam  1,1 sampai  2,2
 
-    `stroke-linecap` sapuan kedua HARUS butt.
+    Enam kali lipat. Lubang sepanjang 2,8 tidak akan pernah muat di tepi dalam,
+    dan yang tergambar di tikungan bukan lubang melainkan goresan tipis.
 
-    Dengan `round`, tiap dash memanjang setengah lebar sapuan di kedua ujungnya
-    — di sini 7,5 unit, sementara celahnya cuma 5,5. Dash-nya saling menyentuh,
-    dan yang tergambar bukan deretan lubang melainkan satu garis putih
-    bergelombang mengelilingi hurufnya.
+    Karena itu tiap tepi ditata sendiri, jaraknya diukur di sepanjang tepi itu
+    sendiri: 17 lubang di satu sisi, 16 di sisi lain, jarak 7,06 dan 7,02.
+    Kedua deret jadi tidak berpasangan lurus menyeberangi pita, dan itu memang
+    harga yang dibayar — pada lengkung serapat ini, pasangan yang lurus dan
+    lubang yang seragam tidak bisa didapat sekaligus. Yang dipilih keseragaman,
+    karena itu yang terlihat.
+
+    Koordinatnya dihitung, bukan dikira: path disampel 900 titik, panjang busur
+    tiap tepi diakumulasi, lalu lubang dijatuhkan pada jarak yang rata. Kalau
+    bentuk hurufnya berubah, angkanya harus dihitung ulang.
+
+    Lubangnya berupa mask, jadi benar-benar tembus. Pita bergradasi, dan lubang
+    yang diisi satu warna datar akan terlihat salah di separuh panjangnya —
+    warna yang cocok di ujung ungu tidak cocok di ujung oranye.
   -->
 
   <defs>
-    <path id="pita" d="M45.5 17 C45.5 11 38.5 8 31 9 C21.5 10 16 16.5 19 22.5 C22 28.5 34 30.5 41 34.5 C48 38.5 50.5 46.5 44 52 C37.5 57.5 26 56 21 49.5" fill="none"/>
+    <linearGradient id="pita-warna" x1="14" y1="6" x2="50" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7b3fe4"/>
+      <stop offset="0.42" stop-color="#a13fd0"/>
+      <stop offset="0.72" stop-color="#e8622a"/>
+      <stop offset="1" stop-color="#f59f2a"/>
+    </linearGradient>
+
+    <mask id="lubang-film" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <path d="M45.5 17 C45.5 11 38.5 8 31 9 C21.5 10 16 16.5 19 22.5 C22 28.5 34 30.5 41 34.5 C48 38.5 50.5 46.5 44 52 C37.5 57.5 26 56 21 49.5" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round"/>
+      <g fill="#000">
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(51.38 15.19) rotate(-97.8)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(48.58 8.81) rotate(-129.5)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(43.03 4.66) rotate(-155.7)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(36.16 2.92) rotate(-174.8)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(29.13 3.19) rotate(171.5)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(22.4 5.14) rotate(155.6)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(16.5 9.17) rotate(134.7)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(12.81 15.12) rotate(107.8)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(12.53 22.14) rotate(76.8)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(15.77 28.28) rotate(47.9)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(21.3 32.49) rotate(28.9)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(27.69 35.39) rotate(21.5)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(34.34 37.97) rotate(22.4)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(40.31 41.5) rotate(47.4)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(40 47.53) rotate(141.2)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(33.34 49.35) rotate(-176.6)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(26.78 46.91) rotate(-139.6)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(38.6 15.86) rotate(-149.3)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(31.72 14.96) rotate(173.2)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(25.29 17.37) rotate(138.4)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(27.71 22.31) rotate(27.2)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(34.11 25) rotate(20.8)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(40.7 27.64) rotate(24.2)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(46.7 31.12) rotate(38.2)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(51.36 36.3) rotate(58.6)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(53.68 42.99) rotate(83.8)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(52.8 49.83) rotate(111)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(48.88 55.67) rotate(135.8)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(43.22 59.49) rotate(156)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(36.44 61.26) rotate(174.3)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(29.35 60.92) rotate(-168.9)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(22.75 58.59) rotate(-151.9)"/>
+        <rect x="-1.4" y="-1.5" width="2.8" height="3" rx="0.5" transform="translate(17.31 54.43) rotate(-132.7)"/>
+      </g>
+    </mask>
   </defs>
 
-  <g fill="none">
-    <use href="#pita" stroke="#1f2024" stroke-width="15" stroke-linecap="round"/>
-    <use href="#pita" stroke="#f4f4f2" stroke-width="15" stroke-linecap="butt" stroke-dasharray="2.8 5"/>
-    <use href="#pita" stroke="#1f2024" stroke-width="9" stroke-linecap="round"/>
-  </g>
+  <rect width="64" height="64" fill="url(#pita-warna)" mask="url(#lubang-film)"/>
 
-  <!-- Segitiga putar, duduk di pinggang huruf S tempat kedua lengkungnya
-       bersilang. Ungu #b567c2 — warna fokus yang sudah dipakai aplikasi, bukan
-       ungu baru yang cuma hidup di logo. -->
-  <path d="M26.5 22.5 L44 32 L26.5 41.5 Z" fill="#b567c2" stroke="#1f2024" stroke-width="2.6" stroke-linejoin="round"/>
+  <g fill="#ffffff">
+    <path d="M25.5 23.5 L36 32 L25.5 40.5 Z"/>
+    <path d="M35 23.5 L45.5 32 L35 40.5 Z"/>
+  </g>
 </svg>

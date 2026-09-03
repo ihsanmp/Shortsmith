@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import "./globals.css";
-import { Logo } from "@/components/ui/logo";
 import { NavBar } from "./nav-bar";
 
 export const metadata: Metadata = {
@@ -35,8 +34,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <div className="shell">
           <nav className="nav">
+            {/* Satu berkas untuk semua tempat.
+                Dulu ada komponen inline terpisah supaya pitanya bisa mengambil
+                `currentColor` dan mengikuti tema. Lambangnya sekarang
+                bergradasi tetap, jadi tidak ada lagi yang perlu diwariskan dari
+                teks di sekitarnya — dan dua salinan bentuk yang sama berarti
+                dua tempat yang harus diingat setiap kali lambangnya berubah. */}
             <a href="/" className="brand">
-              <Logo ukuran={22} />
+              <img src="/logo.svg" width={22} height={22} alt="" />
               Shortsmith
             </a>
             {/* Tiga sel terpisah, bukan dua. Nav pil harus berada di tengah

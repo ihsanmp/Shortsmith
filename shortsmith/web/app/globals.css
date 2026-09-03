@@ -335,9 +335,9 @@ code {
 }
 
 /* Kotak gradien yang dulu berdiri di sini sudah diganti lambang sungguhan —
-   lihat components/ui/logo.tsx. Ia mengambil warna pitanya dari currentColor,
-   jadi tidak ada warna lambang yang perlu diatur dari sini. */
-.brand svg {
+   lihat public/logo.svg. Warnanya hidup di dalam berkas itu, jadi tidak ada
+   warna lambang yang perlu diatur dari sini. */
+.brand img {
   flex: none;
   display: block;
 }

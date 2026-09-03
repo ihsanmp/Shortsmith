@@ -280,7 +280,7 @@ def _format_map(
     return "\n".join(baris)
 
 
-def _format_fokus(brief: str, profile: ConceptProfile) -> str:
+def _format_fokus(brief: str, profile: ConceptProfile, arahan: Arahan | None = None) -> str:
     """Satu-satunya arahan manual di seluruh sistem.
 
     Nilainya datang dari project (kolom "Fokus pembahasan"), dengan konsep
@@ -294,6 +294,20 @@ def _format_fokus(brief: str, profile: ConceptProfile) -> str:
     """
     fokus = brief.strip() or profile.manual.fokus.strip()
     if not fokus:
+        # Kosong TIDAK berarti bebas kalau arahannya diisi.
+        #
+        # Empat komponen arahan sudah menyatakan videonya tentang apa — itu
+        # justru alasan pemilihan topik dilewati saat mereka ada. Tetap menulis
+        # "bebas memilih topik mana pun" di sini membuat prompt menyangkal
+        # dirinya sendiri dua paragraf berturut-turut: satu bilang bebas, satu
+        # lagi bilang wajib. Dan ini bukan kasus pinggiran melainkan jalur
+        # biasanya, karena "Fokus pembahasan" memang dirancang boleh dikosongkan
+        # begitu arahannya diisi.
+        if arahan is not None and arahan.terisi():
+            return (
+                "Ditentukan oleh ARAHAN WAJIB di bawah, bukan di sini. Pakai "
+                "komponen-komponen itu sebagai batas topiknya."
+            )
         return (
             "(tidak ditentukan) Bebas memilih topik mana pun yang dibahas di "
             "rekaman. Ambil bagian yang paling kuat dan paling utuh."
@@ -330,7 +344,7 @@ def _build_prompt(
         _format_map(vmap, jeda_hening=b.sertakan_jeda),
         "",
         "== FOKUS PEMBAHASAN ==",
-        _format_fokus(brief, profile),
+        _format_fokus(brief, profile, arahan),
         "",
     ]
 

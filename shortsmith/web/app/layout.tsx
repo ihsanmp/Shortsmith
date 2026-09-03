@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import "./globals.css";
+import { Logo } from "@/components/ui/logo";
 import { NavBar } from "./nav-bar";
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <div className="shell">
           <nav className="nav">
             <a href="/" className="brand">
+              <Logo ukuran={22} />
               Shortsmith
             </a>
             {/* Tiga sel terpisah, bukan dua. Nav pil harus berada di tengah

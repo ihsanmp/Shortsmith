@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Shortsmith">
+  <title>Shortsmith</title>
+
+  <!--
+    Huruf S berbentuk pita seluloid, dengan segitiga putar di tengahnya.
+
+    Perforasinya TIDAK digambar satu per satu. Ketiga sapuan di bawah memakai
+    path yang sama persis:
+
+      1. sapuan gelap selebar pita        -> badan filmnya
+      2. sapuan terang putus-putus        -> lubang di kedua tepi
+      3. sapuan gelap yang lebih tipis    -> saluran tengah, menutup bagian
+                                             dalam lubang tadi sehingga yang
+                                             tersisa hanya dua deret di tepi
+
+    Karena dash mengikuti panjang path, lubangnya melengkung sendiri mengikuti
+    huruf S — tidak ada satu pun koordinat lubang yang dihitung tangan, dan
+    mengubah bentuk hurufnya tidak menuntut menata ulang lubangnya.
+
+    `stroke-linecap` sapuan kedua HARUS butt.
+
+    Dengan `round`, tiap dash memanjang setengah lebar sapuan di kedua ujungnya
+    — di sini 7,5 unit, sementara celahnya cuma 5,5. Dash-nya saling menyentuh,
+    dan yang tergambar bukan deretan lubang melainkan satu garis putih
+    bergelombang mengelilingi hurufnya.
+  -->
+
+  <defs>
+    <path id="pita" d="M45.5 17 C45.5 11 38.5 8 31 9 C21.5 10 16 16.5 19 22.5 C22 28.5 34 30.5 41 34.5 C48 38.5 50.5 46.5 44 52 C37.5 57.5 26 56 21 49.5" fill="none"/>
+  </defs>
+
+  <g fill="none">
+    <use href="#pita" stroke="#1f2024" stroke-width="15" stroke-linecap="round"/>
+    <use href="#pita" stroke="#f4f4f2" stroke-width="15" stroke-linecap="butt" stroke-dasharray="2.8 5"/>
+    <use href="#pita" stroke="#1f2024" stroke-width="9" stroke-linecap="round"/>
+  </g>
+
+  <!-- Segitiga putar, duduk di pinggang huruf S tempat kedua lengkungnya
+       bersilang. Ungu #b567c2 — warna fokus yang sudah dipakai aplikasi, bukan
+       ungu baru yang cuma hidup di logo. -->
+  <path d="M26.5 22.5 L44 32 L26.5 41.5 Z" fill="#b567c2" stroke="#1f2024" stroke-width="2.6" stroke-linejoin="round"/>
+</svg>

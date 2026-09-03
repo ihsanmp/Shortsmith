@@ -334,12 +334,12 @@ code {
   gap: var(--sp-2);
 }
 
-.brand::before {
-  content: "";
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: var(--grad);
+/* Kotak gradien yang dulu berdiri di sini sudah diganti lambang sungguhan —
+   lihat components/ui/logo.tsx. Ia mengambil warna pitanya dari currentColor,
+   jadi tidak ada warna lambang yang perlu diatur dari sini. */
+.brand svg {
+  flex: none;
+  display: block;
 }
 
 /* ==========================================================================

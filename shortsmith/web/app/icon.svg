@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Shortsmith">
+  <title>Shortsmith</title>
+
+  <!--
+    Ikon tab. Bedanya dengan public/logo.svg cuma satu: ada pelat terang di
+    belakangnya.
+
+    Lambang tanpa pelat memakai pita gelap, dan bilah tab peramban bisa gelap
+    maupun terang tergantung tema sistem orang yang membukanya. Tanpa pelat,
+    separuh pengguna melihat huruf S nyaris hilang di latar sewarna. Pelat
+    memutuskan sendiri latarnya, jadi ikonnya terbaca sama di mana pun.
+
+    Next.js menyajikan berkas ini otomatis karena namanya `icon.svg` dan
+    letaknya di app/ — tidak ada yang perlu didaftarkan di metadata.
+  -->
+
+  <rect width="64" height="64" rx="14" fill="#f4f4f2"/>
+
+  <defs>
+    <path id="pita" d="M45.5 17 C45.5 11 38.5 8 31 9 C21.5 10 16 16.5 19 22.5 C22 28.5 34 30.5 41 34.5 C48 38.5 50.5 46.5 44 52 C37.5 57.5 26 56 21 49.5" fill="none"/>
+  </defs>
+
+  <g fill="none">
+    <use href="#pita" stroke="#1f2024" stroke-width="15" stroke-linecap="round"/>
+    <use href="#pita" stroke="#f4f4f2" stroke-width="15" stroke-linecap="butt" stroke-dasharray="2.8 5"/>
+    <use href="#pita" stroke="#1f2024" stroke-width="9" stroke-linecap="round"/>
+  </g>
+
+  <path d="M26.5 22.5 L44 32 L26.5 41.5 Z" fill="#b567c2" stroke="#1f2024" stroke-width="2.6" stroke-linejoin="round"/>
+</svg>

@@ -118,12 +118,32 @@ export function reapStaleJobsSql(): SQL {
  * Tutup satu job. Kegagalan yang masih punya jatah percobaan dikembalikan ke
  * `pending`, bukan langsung `failed`.
  */
+/**
+ * Menyelesaikan job DAN menyamakan status project-nya dalam satu pernyataan.
+ *
+ * ## Kenapa satu pernyataan, bukan dua
+ *
+ * Sebelumnya `finishJob` menulis dua kali: satu UPDATE ke jobs, lalu satu
+ * UPDATE ke projects memakai project_id yang dikembalikan. Di antara keduanya
+ * ada jendela, dan kalau yang kedua gagal — jaringan tersendat, fungsi
+ * serverless kehabisan waktu — job selesai sementara project-nya tetap
+ * "processing" selamanya.
+ *
+ * Bukan kemungkinan teoretis: satu project dari 30 Juli tercatat berstatus
+ * processing padahal job render-nya `done` dan klipnya sudah ada. Selama
+ * sebulan lebih ia tampil sebagai "sedang diproses" di daftar project, dan
+ * halaman prosesnya akan menjajak tanpa akhir karena syarat berhentinya
+ * menuntut KEDUA status keluar dari processing.
+ *
+ * Sebagai satu pernyataan, keduanya berhasil bersama atau gagal bersama.
+ */
 export function finishJobSql(
   jobId: string,
   status: "done" | "failed",
   errorMessage: string | null,
 ): SQL {
   return sql`
+    WITH selesai AS (
     UPDATE jobs
        SET status = CASE
              WHEN ${status} = 'done' THEN 'done'::job_status
@@ -139,6 +159,19 @@ export function finishJobSql(
                               THEN now() ELSE NULL END
      WHERE id = ${jobId}
     RETURNING status, retry_count, project_id
+    ),
+    -- Project mengikuti status akhir job-nya. Job yang dikembalikan ke antrean
+    -- (pending) membuat project-nya kembali pending juga, persis seperti
+    -- perilaku dua-pernyataan yang digantikannya.
+    --
+    -- Tanpa cast: kedua kolom memakai enum yang sama, job_status.
+    ikut AS (
+      UPDATE projects p
+         SET status = s.status
+        FROM selesai s
+       WHERE p.id = s.project_id
+    )
+    SELECT status, retry_count, project_id FROM selesai
   `;
 }
 

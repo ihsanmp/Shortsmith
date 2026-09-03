@@ -42,6 +42,15 @@ CREATE TABLE concept_profiles (
   siap  boolean NOT NULL DEFAULT false
 );
 
+-- Ada di sini karena finishJobSql menyentuhnya: satu pernyataan menyelesaikan
+-- job DAN menyamakan status project-nya. Tanpa tabel ini, yang diuji cuma
+-- separuh dari apa yang benar-benar dijalankan di produksi.
+CREATE TABLE projects (
+  id     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  judul  text NOT NULL DEFAULT '',
+  status job_status NOT NULL DEFAULT 'pending'
+);
+
 CREATE TABLE jobs (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id    uuid,
@@ -200,6 +209,31 @@ async function main() {
   const g3 = await buat({ status: "processing", retry: 2 });
   const f3 = await q<{ status: string }>(finishJobSql(g3, "failed", "menyerah"));
   cek("gagal setelah batas -> failed permanen", f3[0].status === "failed", f3[0].status);
+
+  // Status project ikut, DALAM pernyataan yang sama.
+  //
+  // Dulu ini dua UPDATE terpisah di lib/jobs.ts, dan jendela di antaranya
+  // meninggalkan satu project berstatus "processing" selama sebulan lebih
+  // padahal job-nya sudah `done` dan klipnya sudah ada. Halaman prosesnya akan
+  // menjajak tanpa akhir, karena syarat berhentinya menuntut KEDUA status
+  // keluar dari processing.
+  const proyek = await q<{ id: string }>(
+    sql`INSERT INTO projects (judul, status) VALUES ('uji', 'processing') RETURNING id`,
+  );
+  const pid = proyek[0].id;
+  const jobP = await buat({ status: "processing" });
+  await q(sql`UPDATE jobs SET project_id = ${pid} WHERE id = ${jobP}`);
+  await q(finishJobSql(jobP, "done", null));
+  const sp = await q<{ status: string }>(sql`SELECT status FROM projects WHERE id = ${pid}`);
+  cek("project ikut jadi done", sp[0].status === "done", sp[0].status);
+
+  // Job yang dikembalikan ke antrean mengembalikan project-nya juga.
+  const jobQ = await buat({ status: "processing", retry: 0 });
+  await q(sql`UPDATE jobs SET project_id = ${pid} WHERE id = ${jobQ}`);
+  await q(sql`UPDATE projects SET status = 'processing' WHERE id = ${pid}`);
+  await q(finishJobSql(jobQ, "failed", "sekali gagal"));
+  const sq = await q<{ status: string }>(sql`SELECT status FROM projects WHERE id = ${pid}`);
+  cek("gagal sekali -> project kembali pending", sq[0].status === "pending", sq[0].status);
 
   // ---- 7. render menunggu konsepnya siap ----
   console.log("\n7. job render tidak diambil sebelum konsepnya siap");

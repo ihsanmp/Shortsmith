@@ -95,12 +95,10 @@ export async function finishJob({
   const row = rows[0];
   if (!row) return null;
 
-  if (row.project_id) {
-    await db
-      .update(projects)
-      .set({ status: row.status as ProjectStatus })
-      .where(eq(projects.id, row.project_id));
-  }
+  // Status project sudah ikut disamakan DI DALAM pernyataan yang sama — lihat
+  // finishJobSql. Dulu di sini ada UPDATE kedua, dan jendela di antara keduanya
+  // yang meninggalkan satu project berstatus "processing" selama sebulan lebih
+  // padahal job-nya sudah `done` dan klipnya sudah ada.
   return { status: row.status, retryCount: row.retry_count };
 }
 

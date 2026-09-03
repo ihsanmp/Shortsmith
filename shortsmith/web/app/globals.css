@@ -332,6 +332,21 @@ code {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
+
+  /* Tanpa ini, tautannya melar mengikuti lebar sel grid-nya.
+     Terukur di 375px: isinya berakhir di x=132, tautannya sampai x=283 — 150
+     piksel header kosong yang ternyata tautan hidup ke beranda. `inline-flex`
+     tidak menolongnya; sebagai item grid ia jadi `flex` dan tetap diregangkan.
+
+     Yang membuatnya lebih dari sekadar rapi: di halaman /project/new, ketukan
+     yang meleset ke ruang kosong itu membawa pengguna ke beranda, dan tidak ada
+     satu pun penjaga yang menanyakan form yang sudah diisi. Bahan, konsep,
+     empat komponen brief — hilang tanpa satu pun peringatan.
+
+     `start`, bukan lebar tetap: kolomnya tetap selebar semula, jadi pil nav di
+     tengah tidak bergeser. Yang berubah hanya seberapa jauh tautannya bisa
+     diketuk. */
+  justify-self: start;
 }
 
 /* Kotak gradien yang dulu berdiri di sini sudah diganti lambang sungguhan —

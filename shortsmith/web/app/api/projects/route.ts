@@ -220,7 +220,29 @@ export async function POST(request: Request) {
   //
   // Jalur konsep baru belum punya profil terukur (agent yang mengisinya nanti),
   // jadi salinannya menyusul lewat jalur ekstraksi.
-  const [project] = await db
+  // Keempat penulisan di bawah berjalan dalam SATU transaksi.
+  //
+  // Berurutan tanpa transaksi, tiap celah di antaranya punya akibatnya sendiri,
+  // dan yang terburuk diam:
+  //
+  //   project tertulis, job tidak  -> project berdiri selamanya sebagai
+  //                                   "pending". Tidak ada agent yang akan
+  //                                   mengambilnya, karena tidak ada job untuk
+  //                                   diambil, dan tidak ada apa pun yang akan
+  //                                   memperbaikinya nanti.
+  //   project tertulis, aset tidak -> job diambil agent, lalu gagal karena
+  //                                   tidak ada bahan.
+  //
+  // Kegagalan seperti itu tidak melempar galat ke mana pun setelah
+  // permintaannya selesai; ia cuma jadi baris yang menunggu tanpa akhir di
+  // daftar project. Pola yang sama pernah benar-benar terjadi di sisi
+  // penyelesaian job — lihat finishJobSql di lib/queue-sql.ts.
+  //
+  // Transaksinya diuji terhadap sambungan Supabase yang dipakai, bukan
+  // diandaikan: pooler mode transaksi membuat sebagian pola BEGIN gagal
+  // diam-diam. Tulis lalu batalkan, dan barisnya memang tidak tersisa.
+  const { project, jobId } = await db.transaction(async (tx) => {
+  const [project] = await tx
     .insert(projects)
     .values({
       judul: body.judul,
@@ -240,7 +262,7 @@ export async function POST(request: Request) {
   // Indeks array ditulis eksplisit ke kolom `urutan`. Jangan pernah bersandar
   // pada urutan insert atau created_at: batch insert memberi timestamp yang
   // sama ke semua baris, dan penentu berikutnya adalah UUID acak.
-  await db.insert(assets).values(
+  await tx.insert(assets).values(
     body.rawKeys.map((r, i) => ({
       projectId: project.id,
       jenis: "raw" as const,
@@ -258,7 +280,7 @@ export async function POST(request: Request) {
   // mentah — menganalisisnya, memecahnya jadi adegan, dan mencoba mengambil
   // gambar dari berkas yang tidak punya gambar.
   if (body.musik) {
-    await db.insert(assets).values({
+    await tx.insert(assets).values({
       projectId: project.id,
       jenis: "music" as const,
       urutan: 0,
@@ -272,13 +294,16 @@ export async function POST(request: Request) {
 
   // Job render dibuat sekarang juga, tapi antrean tidak akan mengambilnya
   // sebelum konsepnya `siap` — penjaganya ada di claimNextJobSql().
-  const [job] = await db
+  const [job] = await tx
     .insert(jobs)
     .values({ projectId: project.id, conceptId, tipe: "render" })
     .returning({ id: jobs.id });
 
+    return { project, jobId: job.id };
+  });
+
   return Response.json(
-    { project, jobId: job.id, jobEkstraksi, conceptId },
+    { project, jobId, jobEkstraksi, conceptId },
     { status: 201 },
   );
 }
